@@ -140,7 +140,7 @@ endif()
 
 endforeach()
 
-add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/../beegfs_irods_connector/src/change_table.capnp.h 
-    COMMAND capnp compile -oc++:${CMAKE_SOURCE_DIR}/../beegfs_irods_connector/src --src-prefix=${CMAKE_SOURCE_DIR}/../beegfs_irods_connector/src ${CMAKE_SOURCE_DIR}/../beegfs_irods_connector/src/change_table.capnp)
+add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/../filesystem_irods_connector/src/change_table.capnp.h 
+    COMMAND capnp compile -oc++:${CMAKE_SOURCE_DIR}/../filesystem_irods_connector/src --src-prefix=${CMAKE_SOURCE_DIR}/../filesystem_irods_connector/src ${CMAKE_SOURCE_DIR}/../filesystem_irods_connector/src/change_table.capnp)
 
 include(CPack) 
