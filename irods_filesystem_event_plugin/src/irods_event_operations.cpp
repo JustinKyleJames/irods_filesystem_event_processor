@@ -58,13 +58,13 @@
 
 #include "inout_structs.h"
 #include "database_routines.hpp"
-#include "irods_beegfs_operations.hpp"
+#include "irods_event_operations.hpp"
 
 #define MAX_BIND_VARS 32000
 extern const char *cllBindVars[MAX_BIND_VARS];
 extern int cllBindVarCount;
 
-const std::string objectIdentifier_avu_key = "beegfs_identifier";
+const std::string objectIdentifier_avu_key = "object_identifier";
 
 const std::string update_data_size_sql = "update R_DATA_MAIN set data_size = ? where data_id = (select * from ("
                    "select R_DATA_MAIN.data_id "
@@ -205,15 +205,15 @@ int find_irods_path_with_avu(rsComm_t *_conn, const std::string& attr, const std
     return 0;
 }
 
-// Returns the path in irods for a file in beegfs based on the mapping in register_map.  
+// Returns the path in irods for a file in the filesytem based on the mapping in register_map.  
 // If the prefix is not in register_map then the function returns -1, otherwise it returns 0.
-int beegfs_path_to_irods_path(const std::string& beegfs_path, const std::vector<std::pair<std::string, std::string> >& register_map,
+int physical_path_to_irods_path(const std::string& physical_path, const std::vector<std::pair<std::string, std::string> >& register_map,
         std::string& irods_path) {
 
     for (auto& iter : register_map) {
-        const std::string& beegfs_path_prefix = iter.first;
-        if (beegfs_path.compare(0, beegfs_path_prefix.length(), beegfs_path_prefix) == 0) {
-            irods_path = iter.second + beegfs_path.substr(beegfs_path_prefix.length());
+        const std::string& physical_path_prefix = iter.first;
+        if (physical_path.compare(0, physical_path_prefix.length(), physical_path_prefix) == 0) {
+            irods_path = iter.second + physical_path.substr(physical_path_prefix.length());
             return 0;
         }
     }
@@ -221,15 +221,15 @@ int beegfs_path_to_irods_path(const std::string& beegfs_path, const std::vector<
     return -1;
 }
 
-// Returns the path in beegfs for a data object in irods based on the mapping in register_map.  
+// Returns the path in filesystem for a data object in irods based on the mapping in register_map.  
 // If the prefix is not in register_map then the function returns -1, otherwise it returns 0.
-int irods_path_to_beegfs_path(const std::string& irods_path, const std::vector<std::pair<std::string, std::string> >& register_map,
-        std::string& beegfs_path) {
+int irods_path_to_physical_path(const std::string& irods_path, const std::vector<std::pair<std::string, std::string> >& register_map,
+        std::string& physical_path) {
 
     // make sure we match the longest possible match
     size_t match_length = 0;
     std::string matched_irods_path_prefix;
-    std::string matched_beegfs_prefix;
+    std::string matched_filesystem_prefix;
 
     for (auto& iter : register_map) {
         const std::string& irods_path_prefix = iter.second;
@@ -237,13 +237,13 @@ int irods_path_to_beegfs_path(const std::string& irods_path, const std::vector<s
             if (irods_path_prefix.length() > match_length) {
                 match_length = irods_path_prefix.length();
                 matched_irods_path_prefix = irods_path_prefix;
-                matched_beegfs_prefix = iter.first;
+                matched_filesystem_prefix = iter.first;
             }
         }
     }
 
     if (match_length > 0) {
-        beegfs_path = matched_beegfs_prefix + irods_path.substr(matched_irods_path_prefix.length());
+        physical_path = matched_filesystem_prefix + irods_path.substr(matched_irods_path_prefix.length());
         return 0;
     }
 
@@ -265,7 +265,7 @@ int get_user_id(rsComm_t* _comm, icatSessionStruct *icss, rodsLong_t& user_id, b
 
 void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
@@ -273,9 +273,9 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
     int status;
   
     std::string irods_path; 
-    if (beegfs_path_to_irods_path(beegfs_path.c_str(), register_map, irods_path) < 0) {
-        rodsLog(LOG_NOTICE, "Skipping entry because beegfs_path [%s] is not in register_map.",
-                   beegfs_path.c_str()); 
+    if (physical_path_to_irods_path(physical_path.c_str(), register_map, irods_path) < 0) {
+        rodsLog(LOG_NOTICE, "Skipping entry because physical_path [%s] is not in register_map.",
+                   physical_path.c_str()); 
         return;
     }
 
@@ -313,7 +313,7 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         cllBindVars[1] = std::to_string(coll_id).c_str();
         cllBindVars[2] = object_name.c_str();
         cllBindVars[3] = std::to_string(file_size).c_str();  
-        cllBindVars[4] = beegfs_path.c_str(); 
+        cllBindVars[4] = physical_path.c_str(); 
         cllBindVars[5] = _comm->clientUser.userName;
         cllBindVars[6] = _comm->clientUser.rodsZone;
         cllBindVars[7] = std::to_string(resource_id).c_str(); 
@@ -351,7 +351,7 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         }
 #endif
 
-        // add beegfs_identifier metadata
+        // add object identiier metadata
         keyValPair_t reg_param;
         memset(&reg_param, 0, sizeof(reg_param));
         addKeyVal(&reg_param, objectIdentifier_avu_key.c_str(), objectIdentifier.c_str());
@@ -367,7 +367,7 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         dataObjInp_t dataObjInp;
         memset(&dataObjInp, 0, sizeof(dataObjInp));
         strncpy(dataObjInp.objPath, irods_path.c_str(), MAX_NAME_LEN);
-        addKeyVal(&dataObjInp.condInput, FILE_PATH_KW, beegfs_path.c_str());
+        addKeyVal(&dataObjInp.condInput, FILE_PATH_KW, physical_path.c_str());
         addKeyVal(&dataObjInp.condInput, RESC_NAME_KW, resource_name.c_str());
         addKeyVal(&dataObjInp.condInput, RESC_HIER_STR_KW, resource_name.c_str());
 
@@ -380,7 +380,7 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
 
         // freeKeyValPairStruct(&dataobjInp.condInput);
  
-        // add beegfs_identifier metadata
+        // add object identifier metadata
         modAVUMetadataInp_t modAVUMetadataInp;
         memset(&modAVUMetadataInp, 0, sizeof(modAVUMetadataInp_t)); 
         modAVUMetadataInp.arg0 = "add";
@@ -399,7 +399,7 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
 }
 
 void handle_batch_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id,
-        const std::string& resource_name, const std::vector<std::string>& objectIdentifier_list, const std::vector<std::string>& beegfs_path_list,
+        const std::string& resource_name, const std::vector<std::string>& objectIdentifier_list, const std::vector<std::string>& physical_path_list,
         const std::vector<std::string>& object_name_list, const std::vector<std::string>& parent_objectIdentifier_list,
         const std::vector<int64_t>& file_size_list, const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss, 
         const rodsLong_t& user_id, bool set_metadata_for_storage_tiering_time_violation, const std::string& metadata_key_for_storage_tiering_time_violation) {
@@ -411,7 +411,7 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
         return;
     }
 
-    if (beegfs_path_list.size() != insert_count || object_name_list.size() != insert_count ||
+    if (physical_path_list.size() != insert_count || object_name_list.size() != insert_count ||
             parent_objectIdentifier_list.size() != insert_count || file_size_list.size() != insert_count) {
 
         rodsLog(LOG_ERROR, "Handle batch create.  Received lists of differing size");
@@ -460,7 +460,7 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
         }
 
         insert_sql += "(" + std::to_string(data_obj_sequences[i]) + ", " + std::to_string(coll_id) + ", '" + object_name_list[i] + "', " +
-            std::to_string(0) +  ", 'generic', " + std::to_string(file_size_list[i]) + ", 'EMPTY_RESC_NAME', '" + beegfs_path_list[i] + "', '" + 
+            std::to_string(0) +  ", 'generic', " + std::to_string(file_size_list[i]) + ", 'EMPTY_RESC_NAME', '" + physical_path_list[i] + "', '" + 
             _comm->clientUser.userName + "', '" + _comm->clientUser.rodsZone + "', 0, 0, " + std::to_string(resource_id) + ")";
 
         if (i < insert_count - 1) {
@@ -631,7 +631,7 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
 
 void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
@@ -639,9 +639,9 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
     int status;
 
     std::string irods_path;
-    if (beegfs_path_to_irods_path(beegfs_path, register_map, irods_path) < 0) {
-        rodsLog(LOG_NOTICE, "Skipping mkdir on beegfs_path [%s] which is not in register_map.",
-               beegfs_path.c_str());
+    if (physical_path_to_irods_path(physical_path, register_map, irods_path) < 0) {
+        rodsLog(LOG_NOTICE, "Skipping mkdir on physical_path [%s] which is not in register_map.",
+               physical_path.c_str());
         return;
     }
 
@@ -661,7 +661,7 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
             return;
         } 
 
-        // add beegfs_identifier metadata
+        // add object identifier metadata
         keyValPair_t reg_param;
         memset(&reg_param, 0, sizeof(reg_param));
         addKeyVal(&reg_param, objectIdentifier_avu_key.c_str(), objectIdentifier.c_str());
@@ -688,7 +688,7 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
             return;
         } 
 
-        // add beegfs_identifier metadata
+        // add object identifier metadata
         modAVUMetadataInp_t modAVUMetadataInp;
         memset(&modAVUMetadataInp, 0, sizeof(modAVUMetadataInp_t)); 
         modAVUMetadataInp.arg0 = "add";
@@ -709,7 +709,7 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
 
 void handle_other(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
@@ -761,7 +761,7 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
 
         modDataObjMetaInp.dataObjInfo = &dataObjInfo;
         dataObjInfo.dataSize = file_size; 
-        strncpy(dataObjInfo.filePath, beegfs_path.c_str(), MAX_NAME_LEN);
+        strncpy(dataObjInfo.filePath, physical_path.c_str(), MAX_NAME_LEN);
         strncpy(dataObjInfo.objPath, irods_path.c_str(), MAX_NAME_LEN);
 
         status = rsModDataObjMeta( _comm, &modDataObjMetaInp );
@@ -777,7 +777,7 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
 
 void handle_rename_file(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
@@ -787,7 +787,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
 
         // update data_name, data_path, and coll_id
         cllBindVars[0] = object_name.c_str();
-        cllBindVars[1] = beegfs_path.c_str();
+        cllBindVars[1] = physical_path.c_str();
         cllBindVars[2] = parent_objectIdentifier.c_str();
         cllBindVars[3] = objectIdentifier.c_str();
         cllBindVarCount = 4;
@@ -836,7 +836,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
 
         keyValPair_t reg_param;
         memset( &reg_param, 0, sizeof( reg_param ) );
-        addKeyVal( &reg_param, FILE_PATH_KW, beegfs_path.c_str());
+        addKeyVal( &reg_param, FILE_PATH_KW, physical_path.c_str());
         modDataObjMetaInp.regParam = &reg_param;
 
         modDataObjMetaInp.dataObjInfo = &dataObjInfo;
@@ -872,7 +872,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
 
 void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
@@ -947,46 +947,42 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 
         try {
 
+            std::string old_physical_path;   
+            std::string new_physical_path;   
 
-            //std::string old_beegfs_path = beegfs_root_path + old_irods_path.substr(register_path.length());
-            //std::string new_beegfs_path = beegfs_root_path + new_irods_path.substr(register_path.length());
-        
-            std::string old_beegfs_path;   
-            std::string new_beegfs_path;   
-
-            if (irods_path_to_beegfs_path(old_irods_path, register_map, old_beegfs_path) < 0) {
-                rodsLog(LOG_ERROR, "%s - could not convert old irods path [%s] to old beegfs path .  skipping.\n", old_irods_path.c_str(), old_beegfs_path.c_str());
+            if (irods_path_to_physical_path(old_irods_path, register_map, old_physical_path) < 0) {
+                rodsLog(LOG_ERROR, "%s - could not convert old irods path [%s] to old filesystem path .  skipping.\n", old_irods_path.c_str(), old_physical_path.c_str());
                 return;
             }
 
-            if (irods_path_to_beegfs_path(new_irods_path, register_map, new_beegfs_path) < 0) {
-                rodsLog(LOG_ERROR, "%s - could not convert new irods path [%s] to new beegfs path .  skipping.\n", new_irods_path.c_str(), new_beegfs_path.c_str());
+            if (irods_path_to_physical_path(new_irods_path, register_map, new_physical_path) < 0) {
+                rodsLog(LOG_ERROR, "%s - could not convert new irods path [%s] to new filesystem path .  skipping.\n", new_irods_path.c_str(), new_physical_path.c_str());
                 return;
             }
 
-            std::string like_clause = old_beegfs_path + "/%";
+            std::string like_clause = old_physical_path + "/%";
 
-            rodsLog(LOG_DEBUG, "old_beegfs_path = %s", old_beegfs_path.c_str());
-            rodsLog(LOG_DEBUG, "new_beegfs_path = %s", new_beegfs_path.c_str());
+            rodsLog(LOG_DEBUG, "old_physical_path = %s", old_physical_path.c_str());
+            rodsLog(LOG_DEBUG, "new_physical_path = %s", new_physical_path.c_str());
 
             // for now, rename all with sql update
 #if defined(POSTGRES_ICAT)
-            cllBindVars[0] = new_beegfs_path.c_str();
-            cllBindVars[1] = old_beegfs_path.c_str();
+            cllBindVars[0] = new_physical_path.c_str();
+            cllBindVars[1] = old_physical_path.c_str();
             cllBindVars[2] = like_clause.c_str();
             cllBindVarCount = 3;
             status = cmlExecuteNoAnswerSql(update_filepath_on_collection_rename_sql.c_str(), icss);
 #elif defined(COCKROACHDB_ICAT)
-            cllBindVars[0] = new_beegfs_path.c_str();
-            std::string old_path_len_str = std::to_string(old_beegfs_path.length());
+            cllBindVars[0] = new_physical_path.c_str();
+            std::string old_path_len_str = std::to_string(old_physical_path.length());
             cllBindVars[1] = old_path_len_str.c_str();
             cllBindVars[2] = like_clause.c_str();
             cllBindVarCount = 3;
             status = cmlExecuteNoAnswerSql(update_filepath_on_collection_rename_sql.c_str(), icss);
 #else
             // oracle and mysql
-            cllBindVars[0] = old_beegfs_path.c_str();
-            cllBindVars[1] = new_beegfs_path.c_str();
+            cllBindVars[0] = old_physical_path.c_str();
+            cllBindVars[1] = new_physical_path.c_str();
             cllBindVars[2] = like_clause.c_str();
             cllBindVarCount = 3;
             status = cmlExecuteNoAnswerSql(update_filepath_on_collection_rename_sql.c_str(), icss);
@@ -1036,7 +1032,7 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 
 void handle_unlink(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
@@ -1129,9 +1125,9 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
             //   also resolves deadlock potential.
     
             std::vector<std::string> object_id_list;
-    
+
             std::string query_objects_sql = "select R_OBJT_METAMAP.object_id from R_OBJT_METAMAP inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                            "where R_META_MAIN.meta_attr_name = 'beegfs_identifier' and R_META_MAIN.meta_attr_value in (";
+                            "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value in (";
              
             for (int64_t i = 0; batch_begin + i < delete_count && i < maximum_records_per_sql_command; ++i) {
                 query_objects_sql += "'" + objectIdentifier_list[batch_begin + i] + "'";
@@ -1311,7 +1307,7 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
             std::vector<std::string> object_id_list;
 
             std::string query_objects_sql = "select R_OBJT_METAMAP.object_id from R_OBJT_METAMAP inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                                            "where R_META_MAIN.meta_attr_name = 'beegfs_identifier' and R_META_MAIN.meta_attr_value in (";
+                                            "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value in (";
          
             for (int64_t i = 0; batch_begin + i < delete_count && i < maximum_records_per_sql_command; ++i) {
                 query_objects_sql += "'" + objectIdentifier_list[batch_begin + i] + "'";
@@ -1417,25 +1413,13 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
 
 void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& beegfs_path, const std::string& object_name, 
+        const std::string& physical_path, const std::string& object_name, 
         const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
     int status;
 
     if (direct_db_access_flag) { 
-
-
-        // don't delete the collection , simply remove the beegfs identifier metadata
-        /*cllBindVars[0] = objectIdentifier.c_str();
-        cllBindVarCount = 1;
-        status = cmlExecuteNoAnswerSql(rmdir_sql.c_str(), icss);
-
-        if (status != 0) {
-            rodsLog(LOG_ERROR, "Error deleting directory %s.  Error is %i", objectIdentifier.c_str(), status);
-            cmlExecuteNoAnswerSql("rollback", icss);
-            return;
-        }*/
 
         // delete the metadata on the collection 
         cllBindVars[0] = objectIdentifier.c_str();
@@ -1486,13 +1470,13 @@ void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& regis
     }
 }
 
-void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& register_map, const std::string& beegfs_path, 
+void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& register_map, const std::string& physical_path, 
                 const std::string& objectIdentifier, rsComm_t* _comm, icatSessionStruct *icss, bool direct_db_access_flag) {
 
     std::string irods_path;
-    if (beegfs_path_to_irods_path(beegfs_path, register_map, irods_path) < 0) {
-        rodsLog(LOG_NOTICE, "Skipping handle_write_fid on beegfs_path [%s] which is not in register_map.",
-               beegfs_path.c_str());
+    if (physical_path_to_irods_path(physical_path, register_map, irods_path) < 0) {
+        rodsLog(LOG_NOTICE, "Skipping handle_write_fid on physical_path [%s] which is not in register_map.",
+               physical_path.c_str());
         return;
     }
 
@@ -1514,7 +1498,7 @@ void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& r
         } 
     }
 
-    // add beegfs_identifier metadata
+    // add object identifier metadata
     modAVUMetadataInp_t modAVUMetadataInp;
     memset(&modAVUMetadataInp, 0, sizeof(modAVUMetadataInp_t)); 
     modAVUMetadataInp.arg0 = "add";

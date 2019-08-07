@@ -49,7 +49,7 @@
 
 #include "inout_structs.h"
 #include "database_routines.hpp"
-#include "irods_beegfs_operations.hpp"
+#include "irods_event_operations.hpp"
 
 
 int call_irodsBeegfsApiInp_irodsBeegfsApiOut( irods::api_entry* _api, 
@@ -117,7 +117,7 @@ static irods::error serialize_irodsBeegfsApiOut_ptr_ptr( boost::any _p,
 // =-=-=-=-=-=-=-
 // api function to be referenced by the entry
 
-int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsBeegfsApiOut_t** _out ) {
+int rs_handle_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsBeegfsApiOut_t** _out ) {
 
     rodsLog( LOG_NOTICE, "Dynamic API - Beegfs API" );
 
@@ -130,12 +130,12 @@ int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsB
     std::string irods_api_update_type(changeMap.getIrodsApiUpdateType().cStr()); 
     bool direct_db_modification_requested = (irods_api_update_type == "direct");
 
-    // read and populate the register_map which holds a mapping of beegfs paths to irods paths
+    // read and populate the register_map which holds a mapping of physical paths to irods paths
     std::vector<std::pair<std::string, std::string> > register_map;
     for (RegisterMapEntry::Reader entry : changeMap.getRegisterMap()) {
-        std::string beegfs_path(entry.getFilePath().cStr());
+        std::string physical_path(entry.getFilePath().cStr());
         std::string irods_register_path(entry.getIrodsRegisterPath().cStr());
-        register_map.push_back(std::make_pair(beegfs_path, irods_register_path));
+        register_map.push_back(std::make_pair(physical_path, irods_register_path));
     }
 
 
@@ -202,8 +202,6 @@ int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsB
         }
     }
 
-    //std::string beegfs_root_path(changeMap.getBeegfsRootPath().cStr()); 
-    //std::string register_path(changeMap.getRegisterPath().cStr()); 
     int64_t resource_id = changeMap.getResourceId();
     std::string resource_name(changeMap.getResourceName().cStr());
     int64_t maximum_records_per_sql_command = changeMap.getMaximumRecordsPerSqlCommand(); 
@@ -212,7 +210,7 @@ int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsB
 
     // for batched file inserts 
     std::vector<std::string> objectIdentifer_list_for_create;
-    std::vector<std::string> beegfs_path_list;
+    std::vector<std::string> physical_path_list;
     std::vector<std::string> object_name_list;
     std::vector<std::string> parent_objectIdentifer_list;
     std::vector<int64_t> file_size_list;
@@ -224,7 +222,7 @@ int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsB
 
         const ChangeDescriptor::EventTypeEnum event_type = entry.getEventType();
         std::string objectIdentifer(entry.getObjectIdentifier().cStr());
-        std::string beegfs_path(entry.getFilePath().cStr());
+        std::string physical_path(entry.getFilePath().cStr());
         std::string object_name(entry.getObjectName().cStr());
         const ChangeDescriptor::ObjectTypeEnum object_type = entry.getObjectType();
         std::string parent_objectIdentifer(entry.getParentObjectIdentifier().cStr());
@@ -235,45 +233,45 @@ int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsB
         if (event_type == ChangeDescriptor::EventTypeEnum::CREATE) {
             if (direct_db_modification_requested) {
                 objectIdentifer_list_for_create.push_back(objectIdentifer);
-                beegfs_path_list.push_back(beegfs_path);
+                physical_path_list.push_back(physical_path);
                 object_name_list.push_back(object_name);
                 parent_objectIdentifer_list.push_back(parent_objectIdentifer);
                 file_size_list.push_back(file_size);
             } else {
                 handle_create(register_map, resource_id, resource_name,
-                        objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                        objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                         _comm, icss, user_id, direct_db_modification_requested);
             }
         } else if (event_type == ChangeDescriptor::EventTypeEnum::MKDIR) {
             handle_mkdir(register_map, resource_id, resource_name,
-                    objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
         } else if (event_type == ChangeDescriptor::EventTypeEnum::OTHER) {
             handle_other(register_map, resource_id, resource_name,
-                    objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
         } else if (event_type == ChangeDescriptor::EventTypeEnum::RENAME and object_type == ChangeDescriptor::ObjectTypeEnum::FILE) {
             handle_rename_file(register_map, resource_id, resource_name,
-                    objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
         } else if (event_type == ChangeDescriptor::EventTypeEnum::RENAME and object_type == ChangeDescriptor::ObjectTypeEnum::DIR) {
             handle_rename_dir(register_map, resource_id, resource_name,
-                    objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
         } else if (event_type == ChangeDescriptor::EventTypeEnum::UNLINK) {
             if (direct_db_modification_requested) {
                 objectIdentifer_list_for_unlink.push_back(objectIdentifer);
             } else {
                 handle_unlink(register_map, resource_id, resource_name,
-                        objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                        objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                         _comm, icss, user_id, direct_db_modification_requested);
             }
         } else if (event_type == ChangeDescriptor::EventTypeEnum::RMDIR) {
             handle_rmdir(register_map, resource_id, resource_name,
-                    objectIdentifer, beegfs_path, object_name, object_type, parent_objectIdentifer, file_size,
+                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
         } else if (event_type == ChangeDescriptor::EventTypeEnum::WRITE_FID) {
-            handle_write_fid(register_map, beegfs_path, objectIdentifer, _comm, icss, direct_db_modification_requested);
+            handle_write_fid(register_map, physical_path, objectIdentifer, _comm, icss, direct_db_modification_requested);
         }
 
 
@@ -287,7 +285,7 @@ int rs_handle_beegfs_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsB
  
         if (objectIdentifer_list_for_create.size() > 0) {
             handle_batch_create(register_map, resource_id, resource_name,
-                    objectIdentifer_list_for_create, beegfs_path_list, object_name_list, parent_objectIdentifer_list, file_size_list,
+                    objectIdentifer_list_for_create, physical_path_list, object_name_list, parent_objectIdentifer_list, file_size_list,
                     maximum_records_per_sql_command, _comm, icss, user_id, set_metadata_for_storage_tiering_time_violation,
                     metadata_key_for_storage_tiering_time_violation);
         }
@@ -314,8 +312,8 @@ extern "C" {
                                 "IrodsBeegfsApiOut", 0, // out PI / bs flag
                                 std::function<
                                     int( rsComm_t*,irodsBeegfsApiInp_t*,irodsBeegfsApiOut_t**)>(
-                                        rs_handle_beegfs_records), // operation
-								"rs_handle_beegfs_records",    // operation name
+                                        rs_handle_records), // operation
+								"rs_handle_records",    // operation name
                                 0,  // null clear fcn
                                 (funcPtr)CALL_IRODS_BEEGFS_API_INP_OUT
                               };
