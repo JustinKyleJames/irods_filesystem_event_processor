@@ -254,7 +254,6 @@ void run_main_changelog_reader_loop(const beegfs_irods_connector_cfg_t& config_s
 
     bool pause_reading = false;
     unsigned int sleep_period = config_struct.changelog_poll_interval_seconds;
-    //unsigned int max_number_of_changelog_records = config_struct.maximum_records_to_receive_from_beegfs_changelog;
 
     BeeGFS::FileEventReceiver receiver(config_struct.beegfs_socket.c_str());
 
