@@ -1,0 +1,7 @@
+{
+        "beegfs_socket": "/tmp/beegfslog",
+        "beegfs_root_path": "/mnt/beegfs",
+        "log_level": "LOG_DBG",
+        "event_aggregator_address": "ipc:///changelog_reader_push_work_events"
+}
+

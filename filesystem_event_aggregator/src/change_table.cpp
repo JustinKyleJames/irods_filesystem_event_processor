@@ -15,14 +15,14 @@
 #include <boost/format.hpp>
 
 // local headers
-#include "beegfs_change_table.hpp"
+#include "change_table.hpp"
 #include "inout_structs.h"
 #include "logging.hpp"
 #include "config.hpp"
-#include "beegfs_irods_errors.hpp"
+#include "../../common/irods_filesystem_event_processor_errors.hpp"
 
 // capnproto
-#include "change_table.capnp.h"
+#include "../../common/change_table.capnp.h"
 #include <capnp/message.h>
 #include <capnp/serialize-packed.h>
 
@@ -44,7 +44,7 @@ size_t get_change_table_size(change_map_t& change_map) {
 }
     
 
-int beegfs_write_objectId_to_root_dir(const std::string& beegfs_root_path, const std::string& objectId, change_map_t& change_map) {
+int write_objectId_to_root_dir(const std::string& fs_mount_path, const std::string& objectId, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -54,18 +54,18 @@ int beegfs_write_objectId_to_root_dir(const std::string& beegfs_root_path, const
     entry.parent_objectId = "";
     entry.object_name = "";
     entry.object_type = ChangeDescriptor::ObjectTypeEnum::DIR;
-    entry.beegfs_path = beegfs_root_path;
+    entry.physical_path = fs_mount_path;
     entry.oper_complete = true;
     entry.timestamp = time(NULL);
     entry.last_event = ChangeDescriptor::EventTypeEnum::WRITE_FID;
     change_map.insert(entry);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 
 }
 
-int beegfs_close(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_close(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
  
@@ -73,9 +73,9 @@ int beegfs_close(unsigned long long cr_index, const std::string& beegfs_root_pat
     auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
 
     struct stat st;
-    int result = stat(beegfs_path.c_str(), &st);
+    int result = stat(physical_path.c_str(), &st);
 
-    LOG(LOG_DBG, "stat(%s, &st)\n", beegfs_path.c_str());
+    LOG(LOG_DBG, "stat(%s, &st)\n", physical_path.c_str());
     LOG(LOG_DBG, "handle_close:  stat_result = %i, file_size = %ld\n", result, st.st_size);
 
     auto iter = change_map_objectId.find(objectId);
@@ -94,7 +94,7 @@ int beegfs_close(unsigned long long cr_index, const std::string& beegfs_root_pat
         entry.parent_objectId = parent_objectId;
         entry.object_name = object_name;
         entry.object_type = (result == 0 && S_ISDIR(st.st_mode)) ? ChangeDescriptor::ObjectTypeEnum::DIR : ChangeDescriptor::ObjectTypeEnum::FILE;
-        entry.beegfs_path = beegfs_path; 
+        entry.physical_path = physical_path; 
         entry.oper_complete = true;
         entry.timestamp = time(NULL);
         entry.last_event = ChangeDescriptor::EventTypeEnum::OTHER;
@@ -104,14 +104,14 @@ int beegfs_close(unsigned long long cr_index, const std::string& beegfs_root_pat
 
         change_map.insert(entry);
     }
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 
 }
 
-int beegfs_mkdir(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_mkdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
-    LOG(LOG_ERR, "beegfs_mkdir:  parent_objectId=%s\n", parent_objectId.c_str());
+    LOG(LOG_ERR, "handle_mkdir:  parent_objectId=%s\n", parent_objectId.c_str());
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -130,19 +130,19 @@ int beegfs_mkdir(unsigned long long cr_index, const std::string& beegfs_root_pat
         entry.objectId = objectId;
         entry.parent_objectId = parent_objectId;
         entry.object_name = object_name;
-        entry.beegfs_path = beegfs_path;
+        entry.physical_path = physical_path;
         entry.oper_complete = true;
         entry.last_event = ChangeDescriptor::EventTypeEnum::MKDIR;
         entry.timestamp = time(NULL);
         entry.object_type = ChangeDescriptor::ObjectTypeEnum::DIR;
         change_map.insert(entry);
     }
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 
 }
 
-int beegfs_rmdir(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_rmdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
@@ -156,7 +156,7 @@ int beegfs_rmdir(unsigned long long cr_index, const std::string& beegfs_root_pat
         change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
         change_map_objectId.modify(iter, [parent_objectId](change_descriptor &cd){ cd.parent_objectId = parent_objectId; });
         change_map_objectId.modify(iter, [object_name](change_descriptor &cd){ cd.object_name = object_name; });
-        change_map_objectId.modify(iter, [beegfs_path](change_descriptor &cd){ cd.beegfs_path = beegfs_path; });
+        change_map_objectId.modify(iter, [physical_path](change_descriptor &cd){ cd.physical_path = physical_path; });
         change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
         change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.last_event = ChangeDescriptor::EventTypeEnum::RMDIR; });
         change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
@@ -172,13 +172,13 @@ int beegfs_rmdir(unsigned long long cr_index, const std::string& beegfs_root_pat
         entry.object_name = object_name;
         change_map.insert(entry);
     }
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 
 
 }
 
-int beegfs_unlink(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                  const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_unlink(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                  const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
   
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -203,7 +203,7 @@ int beegfs_unlink(unsigned long long cr_index, const std::string& beegfs_root_pa
         entry.cr_index = cr_index;
         entry.objectId = objectId;
         //entry.parent_objectId = parent_objectId;
-        //entry.beegfs_path = beegfs_path;
+        //entry.physical_path = physical_path;
         entry.oper_complete = true;
         entry.last_event = ChangeDescriptor::EventTypeEnum::UNLINK;
         entry.timestamp = time(NULL);
@@ -212,11 +212,11 @@ int beegfs_unlink(unsigned long long cr_index, const std::string& beegfs_root_pa
         change_map.insert(entry);
     }
 
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 }
 
-int beegfs_rename(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                  const std::string& object_name, const std::string& beegfs_path, const std::string& old_beegfs_path, change_map_t& change_map) {
+int handle_rename(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                  const std::string& object_name, const std::string& physical_path, const std::string& old_physical_path, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -227,22 +227,22 @@ int beegfs_rename(unsigned long long cr_index, const std::string& beegfs_root_pa
     std::string original_path;
 
     struct stat statbuf;
-    bool is_dir = stat(beegfs_path.c_str(), &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
+    bool is_dir = stat(physical_path.c_str(), &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
 
-    // if there is a previous entry, just update the beegfs_path to the new path
+    // if there is a previous entry, just update the physical_path to the new path
     // otherwise, add a new entry
     if(iter != change_map_objectId.end()) {
         change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
         change_map_objectId.modify(iter, [parent_objectId](change_descriptor &cd){ cd.parent_objectId = parent_objectId; });
         change_map_objectId.modify(iter, [object_name](change_descriptor &cd){ cd.object_name = object_name; });
-        change_map_objectId.modify(iter, [beegfs_path](change_descriptor &cd){ cd.beegfs_path = beegfs_path; });
+        change_map_objectId.modify(iter, [physical_path](change_descriptor &cd){ cd.physical_path = physical_path; });
     } else {
         change_descriptor entry{};
         entry.cr_index = cr_index;
         entry.objectId = objectId;
         entry.parent_objectId = parent_objectId;
         entry.object_name = object_name;
-        entry.beegfs_path = beegfs_path;
+        entry.physical_path = physical_path;
         entry.oper_complete = true;
         entry.last_event = ChangeDescriptor::EventTypeEnum::RENAME;
         entry.timestamp = time(NULL);
@@ -259,25 +259,25 @@ int beegfs_rename(unsigned long long cr_index, const std::string& beegfs_root_pa
         change_map.insert(entry);
     }
 
-    LOG(LOG_DBG, "rename:  old_beegfs_path = %s\n", old_beegfs_path.c_str());
+    LOG(LOG_DBG, "rename:  old_physical_path = %s\n", old_physical_path.c_str());
 
     if (is_dir) {
 
         // search through and update all references in table
         for (auto iter = change_map_objectId.begin(); iter != change_map_objectId.end(); ++iter) {
-            std::string p = iter->beegfs_path;
-            if (p.length() > 0 && p.length() != old_beegfs_path.length() && boost::starts_with(p, old_beegfs_path)) {
-                change_map_objectId.modify(iter, [old_beegfs_path, beegfs_path](change_descriptor &cd){ cd.beegfs_path.replace(0, old_beegfs_path.length(), beegfs_path); });
+            std::string p = iter->physical_path;
+            if (p.length() > 0 && p.length() != old_physical_path.length() && boost::starts_with(p, old_physical_path)) {
+                change_map_objectId.modify(iter, [old_physical_path, physical_path](change_descriptor &cd){ cd.physical_path.replace(0, old_physical_path.length(), physical_path); });
             }
         }
     }
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 
 
 }
 
-int beegfs_create(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                  const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_create(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                  const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -289,7 +289,7 @@ int beegfs_create(unsigned long long cr_index, const std::string& beegfs_root_pa
         change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
         change_map_objectId.modify(iter, [parent_objectId](change_descriptor &cd){ cd.parent_objectId = parent_objectId; });
         change_map_objectId.modify(iter, [object_name](change_descriptor &cd){ cd.object_name = object_name; });
-        change_map_objectId.modify(iter, [beegfs_path](change_descriptor &cd){ cd.beegfs_path = beegfs_path; });
+        change_map_objectId.modify(iter, [physical_path](change_descriptor &cd){ cd.physical_path = physical_path; });
         change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
         change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.last_event = ChangeDescriptor::EventTypeEnum::CREATE; });
         change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
@@ -299,7 +299,7 @@ int beegfs_create(unsigned long long cr_index, const std::string& beegfs_root_pa
         entry.objectId = objectId;
         entry.parent_objectId = parent_objectId;
         entry.object_name = object_name;
-        entry.beegfs_path = beegfs_path;
+        entry.physical_path = physical_path;
         entry.oper_complete = false;
         entry.last_event = ChangeDescriptor::EventTypeEnum::CREATE;
         entry.timestamp = time(NULL);
@@ -307,12 +307,12 @@ int beegfs_create(unsigned long long cr_index, const std::string& beegfs_root_pa
         change_map.insert(entry);
     }
 
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 
 }
 
-int beegfs_mtime(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_mtime(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -329,7 +329,7 @@ int beegfs_mtime(unsigned long long cr_index, const std::string& beegfs_root_pat
         entry.cr_index = cr_index;
         entry.objectId = objectId;
         //entry.parent_objectId = parent_objectId;
-        //entry.beegfs_path = beegfs_path;
+        //entry.physical_path = physical_path;
         //entry.object_name = object_name;
         entry.last_event = ChangeDescriptor::EventTypeEnum::OTHER;
         entry.oper_complete = false;
@@ -337,12 +337,12 @@ int beegfs_mtime(unsigned long long cr_index, const std::string& beegfs_root_pat
         change_map.insert(entry);
     }
 
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 
 }
 
-int beegfs_trunc(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map) {
+int handle_trunc(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -350,7 +350,7 @@ int beegfs_trunc(unsigned long long cr_index, const std::string& beegfs_root_pat
     auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
 
     struct stat st;
-    int result = stat(beegfs_path.c_str(), &st);
+    int result = stat(physical_path.c_str(), &st);
 
     LOG(LOG_DBG, "handle_trunc:  stat_result = %i, file_size = %ld\n", result, st.st_size);
 
@@ -367,7 +367,7 @@ int beegfs_trunc(unsigned long long cr_index, const std::string& beegfs_root_pat
         entry.cr_index = cr_index;
         entry.objectId = objectId;
         //entry.parent_objectId = parent_objectId;
-        //entry.beegfs_path = beegfs_path;
+        //entry.physical_path = physical_path;
         //entry.object_name = object_name;
         entry.oper_complete = false;
         entry.timestamp = time(NULL);
@@ -377,7 +377,7 @@ int beegfs_trunc(unsigned long long cr_index, const std::string& beegfs_root_pat
         change_map.insert(entry);
     }
 
-    return beegfs_irods::SUCCESS; 
+    return irods_filesystem_event_processor_error::SUCCESS; 
 
 
 }
@@ -391,7 +391,7 @@ int remove_objectId_from_table(const std::string& objectId, change_map_t& change
 
     change_map_objectId.erase(objectId);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 // precondition:  result has buffer_size reserved
@@ -399,17 +399,17 @@ int remove_objectId_from_table(const std::string& objectId, change_map_t& change
  
     if (p1 == nullptr) {
         LOG(LOG_ERR, "Null p1 in %s - %d\n", __FUNCTION__, __LINE__);    
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
     if (p2 == nullptr) {
         LOG(LOG_ERR, "Null p2 in %s - %d\n", __FUNCTION__, __LINE__); 
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
     if (result == nullptr) {
         LOG(LOG_ERR, "Null result in %s - %d\n", __FUNCTION__, __LINE__); 
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
 
@@ -419,11 +419,11 @@ int remove_objectId_from_table(const std::string& objectId, change_map_t& change
 
     snprintf(result, buffer_size, "%s", path_result.string().c_str());
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }*/
 
 // This is just a debugging function
-void beegfs_write_change_table_to_str(const change_map_t& change_map, std::string& buffer) {
+void write_change_table_to_str(const change_map_t& change_map, std::string& buffer) {
 
     boost::format change_record_header_format_obj("%-15s %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-15s %-10s\n");
     boost::format change_record_format_obj("%015u %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-15s %lu\n");
@@ -451,7 +451,7 @@ void beegfs_write_change_table_to_str(const change_map_t& change_map, std::strin
          buffer += str(change_record_format_obj % iter->cr_index % objectId.c_str() % iter->parent_objectId.c_str() %
                  object_type_to_str(iter->object_type).c_str() %
                  iter->object_name.c_str() % 
-                 iter->beegfs_path.c_str() % time_str % 
+                 iter->physical_path.c_str() % time_str % 
                  event_type_to_str(iter->last_event).c_str() %
                  (iter->oper_complete == 1 ? "true" : "false") % iter->file_size);
 
@@ -460,10 +460,10 @@ void beegfs_write_change_table_to_str(const change_map_t& change_map, std::strin
 }
 
 // This is just a debugging function
-void beegfs_print_change_table(const change_map_t& change_map) {
+void print_change_table(const change_map_t& change_map) {
    
     std::string change_table_str; 
-    beegfs_write_change_table_to_str(change_map, change_table_str);
+    write_change_table_to_str(change_map, change_table_str);
     LOG(LOG_DBG, "%s", change_table_str.c_str());
 }
 
@@ -472,7 +472,7 @@ int set_update_status_in_capnproto_buf(unsigned char*& buf, size_t& buflen, cons
 
     if (nullptr == buf) {
         LOG(LOG_ERR, "Null buffer sent to %s - %d\n", __FUNCTION__, __LINE__);
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
     const kj::ArrayPtr<const capnp::word> array_ptr{ reinterpret_cast<const capnp::word*>(&(*(buf))),
@@ -495,7 +495,7 @@ int set_update_status_in_capnproto_buf(unsigned char*& buf, size_t& buflen, cons
     buflen = message_size;
     memcpy(buf, std::begin(array), message_size);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 
@@ -503,7 +503,7 @@ int get_update_status_from_capnproto_buf(unsigned char* buf, size_t buflen, std:
 
     if (nullptr == buf) {
         LOG(LOG_ERR, "Null buffer sent to %s - %d\n", __FUNCTION__, __LINE__);
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
     const kj::ArrayPtr<const capnp::word> array_ptr{ reinterpret_cast<const capnp::word*>(&(*(buf))),
@@ -512,14 +512,14 @@ int get_update_status_from_capnproto_buf(unsigned char* buf, size_t buflen, std:
 
     ChangeMap::Reader changeMap = message.getRoot<ChangeMap>();
     update_status = changeMap.getUpdateStatus().cStr();
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 
 // Processes change table by writing records ready to be sent to iRODS into capnproto buffer (buf).
 // The size of the buffer is written to buflen.
 // Note:  The buf is malloced and must be freed by caller.
-int write_change_table_to_capnproto_buf(const beegfs_irods_connector_cfg_t *config_struct_ptr, void*& buf, size_t& buflen, 
+int write_change_table_to_capnproto_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, void*& buf, size_t& buflen, 
         change_map_t& change_map, std::set<std::string>& active_objectId_list) {
 
 
@@ -528,7 +528,7 @@ int write_change_table_to_capnproto_buf(const beegfs_irods_connector_cfg_t *conf
 
     if (nullptr == config_struct_ptr) {
         LOG(LOG_ERR, "Null config_struct_ptr sent to %s - %d\n", __FUNCTION__, __LINE__);
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
@@ -605,16 +605,16 @@ int write_change_table_to_capnproto_buf(const beegfs_irods_connector_cfg_t *conf
             entries[cnt].setParentObjectIdentifier(iter->parent_objectId);
             entries[cnt].setObjectType(iter->object_type);
             entries[cnt].setObjectName(iter->object_name);
-            entries[cnt].setFilePath(iter->beegfs_path);
+            entries[cnt].setFilePath(iter->physical_path);
             entries[cnt].setEventType(iter->last_event);
             entries[cnt].setFileSize(iter->file_size);
 
             // **** debug **** 
             std::string objectId(entries[cnt].getObjectIdentifier().cStr());
-            std::string beegfs_path(entries[cnt].getFilePath().cStr());
+            std::string physical_path(entries[cnt].getFilePath().cStr());
             std::string object_name(entries[cnt].getObjectName().cStr());
             std::string parent_objectId(entries[cnt].getParentObjectIdentifier().cStr());
-            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][beegfs_path=%s]\n", objectId.c_str(), parent_objectId.c_str(), object_name.c_str(), beegfs_path.c_str());
+            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][physical_path=%s]\n", objectId.c_str(), parent_objectId.c_str(), object_name.c_str(), physical_path.c_str());
             // *************
 
             // before deleting write the entry to removed_entries 
@@ -649,10 +649,10 @@ int write_change_table_to_capnproto_buf(const beegfs_irods_connector_cfg_t *conf
     active_objectId_list.insert(temp_objectId_list.begin(), temp_objectId_list.end());
 
     if (collision_in_objectId) {
-        return beegfs_irods::COLLISION_IN_FIDSTR;
+        return irods_filesystem_event_processor_error::COLLISION_IN_FIDSTR;
     }
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 // If we get a failure, the accumulator needs to add the entry back to the list.
@@ -660,7 +660,7 @@ int add_capnproto_buffer_back_to_change_table(unsigned char* buf, size_t buflen,
 
     if (nullptr == buf) {
         LOG(LOG_ERR, "Null buffer sent to %s - %d\n", __FUNCTION__, __LINE__);
-        return beegfs_irods::INVALID_OPERAND_ERROR;
+        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
 
@@ -678,7 +678,7 @@ int add_capnproto_buffer_back_to_change_table(unsigned char* buf, size_t buflen,
         record.cr_index = entry.getCrIndex();
         record.last_event = entry.getEventType();
         record.objectId = entry.getObjectIdentifier().cStr();
-        record.beegfs_path = entry.getFilePath().cStr();
+        record.physical_path = entry.getFilePath().cStr();
         record.object_name = entry.getObjectName().cStr();
         record.object_type = entry.getObjectType();
         record.parent_objectId = entry.getParentObjectIdentifier().cStr();
@@ -691,11 +691,11 @@ int add_capnproto_buffer_back_to_change_table(unsigned char* buf, size_t buflen,
         change_map.insert(record);
 
         // remove objectId from active objectId list
-        //LOG(LOG_DBG, "add_capnproto_buffer_back_to_change_table: removing objectId %s from active objectId list - beegfs_path is %s\n", record.objectId.c_str(), record.beegfs_path.c_str());
+        //LOG(LOG_DBG, "add_capnproto_buffer_back_to_change_table: removing objectId %s from active objectId list - physical_path is %s\n", record.objectId.c_str(), record.physical_path.c_str());
         active_objectId_list.erase(record.objectId);
     }
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }   
 
 void remove_objectId_from_active_list(unsigned char* buf, size_t buflen, std::set<std::string>& active_objectId_list) {
@@ -709,8 +709,8 @@ void remove_objectId_from_active_list(unsigned char* buf, size_t buflen, std::se
 
     for (ChangeDescriptor::Reader entry : change_map_from_message.getEntries()) {
         std::string objectId = entry.getObjectIdentifier().cStr();
-        std::string beegfs_path = entry.getFilePath().cStr();
-        //LOG(LOG_DBG, "remove_objectId_from_active_list: removing objectId %s from active objectId list - beegfs_path is %s\n", objectId.c_str(), beegfs_path.c_str());
+        std::string physical_path = entry.getFilePath().cStr();
+        //LOG(LOG_DBG, "remove_objectId_from_active_list: removing objectId %s from active objectId list - physical_path is %s\n", objectId.c_str(), physical_path.c_str());
         active_objectId_list.erase(objectId.c_str());
     }
 
@@ -806,7 +806,7 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
 
     if (rc) {
         LOG(LOG_ERR, "Can't open %s for serialization.\n", serialize_file.c_str());
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     // get change map with sequenced index  
@@ -821,13 +821,13 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
         }
 
         sqlite3_stmt *stmt;     
-        sqlite3_prepare_v2(db, "insert into change_map (objectId, parent_objectId, object_name, beegfs_path, last_event, "
+        sqlite3_prepare_v2(db, "insert into change_map (objectId, parent_objectId, object_name, physical_path, last_event, "
                                "timestamp, oper_complete, object_type, file_size, cr_index) values (?1, ?2, ?3, ?4, "
                                "?5, ?6, ?7, ?8, ?9, ?10);", -1, &stmt, NULL);       
         sqlite3_bind_text(stmt, 1, iter->objectId.c_str(), -1, SQLITE_STATIC); 
         sqlite3_bind_text(stmt, 2, iter->parent_objectId.c_str(), -1, SQLITE_STATIC); 
         sqlite3_bind_text(stmt, 3, iter->object_name.c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_text(stmt, 4, iter->beegfs_path.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 4, iter->physical_path.c_str(), -1, SQLITE_STATIC); 
         sqlite3_bind_text(stmt, 5, event_type_to_str(iter->last_event).c_str(), -1, SQLITE_STATIC); 
         sqlite3_bind_int(stmt, 6, iter->timestamp); 
         sqlite3_bind_int(stmt, 7, iter->oper_complete ? 1 : 0);
@@ -845,7 +845,7 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
 
     sqlite3_close(db);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 static int query_callback_change_map(void *change_map_void_ptr, int argc, char** argv, char** columnNames) {
@@ -856,7 +856,7 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
 
     if (10 != argc) {
         LOG(LOG_ERR, "Invalid number of columns returned from change_map query in database.\n");
-        return  beegfs_irods::SQLITE_DB_ERROR;
+        return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     change_map_t *change_map = static_cast<change_map_t*>(change_map_void_ptr);
@@ -866,7 +866,7 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
     entry.parent_objectId = argv[1];
     entry.object_name = argv[2];
     entry.object_type = str_to_object_type(argv[3]);
-    entry.beegfs_path = argv[4]; 
+    entry.physical_path = argv[4]; 
 
     int oper_complete;
     int timestamp;
@@ -880,7 +880,7 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
         cr_index = boost::lexical_cast<unsigned long long>(argv[9]);
     } catch( boost::bad_lexical_cast const& ) {
         LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.\n");
-        return  beegfs_irods::SQLITE_DB_ERROR;
+        return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     entry.oper_complete = (oper_complete == 1);
@@ -892,7 +892,7 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
     std::lock_guard<std::mutex> lock(change_table_mutex);
     change_map->insert(entry);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** argv, char** columnNames) {
@@ -903,7 +903,7 @@ static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** arg
 
     if (1 != argc) {
         LOG(LOG_ERR, "Invalid number of columns returned from cr_index query in database.\n");
-        return  beegfs_irods::SQLITE_DB_ERROR;
+        return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     LOG(LOG_DBG, "%s - argv[0] = [%s]\n", __FUNCTION__, argv[0]);
@@ -917,11 +917,11 @@ static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** arg
             *cr_index_ptr = boost::lexical_cast<unsigned long long>(argv[0]);
         } catch( boost::bad_lexical_cast const& ) {
             LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.\n");
-            return  beegfs_irods::SQLITE_DB_ERROR;
+            return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
         }
     }
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_file) {
@@ -936,7 +936,7 @@ int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_
 
     if (rc) {
         LOG(LOG_ERR, "Can't open %s for serialization.\n", serialize_file.c_str());
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
 
@@ -953,7 +953,7 @@ int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_
     sqlite3_finalize(stmt);
     sqlite3_close(db);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 
@@ -968,7 +968,7 @@ int get_cr_index(unsigned long long& cr_index, const std::string& db_file) {
 
     if (rc) {
         LOG(LOG_ERR, "Can't open %s to read changemap index.\n", serialize_file.c_str());
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     rc = sqlite3_exec(db, "select max(cr_index) from last_cr_index", query_callback_cr_index, &cr_index, &zErrMsg);
@@ -976,12 +976,12 @@ int get_cr_index(unsigned long long& cr_index, const std::string& db_file) {
     if (rc) {
         LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s\n", zErrMsg);
         sqlite3_close(db);
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     sqlite3_close(db);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 
@@ -998,16 +998,16 @@ int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::stri
 
     if (rc) {
         LOG(LOG_ERR, "Can't open %s for de-serialization.\n", serialize_file.c_str());
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
-    rc = sqlite3_exec(db, "select objectId, parent_objectId, object_name, object_type, beegfs_path, oper_complete, "
+    rc = sqlite3_exec(db, "select objectId, parent_objectId, object_name, object_type, physical_path, oper_complete, "
                           "timestamp, last_event, file_size, cr_index from change_map", query_callback_change_map, &change_map, &zErrMsg);
 
     if (rc) {
         LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s\n", zErrMsg);
         sqlite3_close(db);
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     // delete contents of table using sqlite truncate optimizer
@@ -1016,12 +1016,12 @@ int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::stri
     if (rc) {
         LOG(LOG_ERR, "Error clearing out change_map from db during de-serialization: %s\n", zErrMsg);
         sqlite3_close(db);
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     sqlite3_close(db);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 int initiate_change_map_serialization_database(const std::string& db_file) {
@@ -1035,7 +1035,7 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
        "cr_index integer, "
        "parent_objectId char(256), "
        "object_name char(256), "
-       "beegfs_path char(256), "
+       "physical_path char(256), "
        "last_event char(256), "
        "timestamp integer, "
        "oper_complete integer, "
@@ -1051,7 +1051,7 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
 
     if (rc) {
         LOG(LOG_ERR, "Can't create or open %s.\n", serialize_file.c_str());
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     rc = sqlite3_exec(db, create_table_str,  NULL, NULL, &zErrMsg);
@@ -1059,7 +1059,7 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
     if (rc) {
         LOG(LOG_ERR, "Error creating change_map table: %s\n", zErrMsg);
         sqlite3_close(db);
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     rc = sqlite3_exec(db, create_last_cr_index_table,  NULL, NULL, &zErrMsg);
@@ -1067,13 +1067,13 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
     if (rc) {
         LOG(LOG_ERR, "Error creating last_cr_index table: %s\n", zErrMsg);
         sqlite3_close(db);
-        return beegfs_irods::SQLITE_DB_ERROR;
+        return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
 
     sqlite3_close(db);
 
-    return beegfs_irods::SUCCESS;
+    return irods_filesystem_event_processor_error::SUCCESS;
 }
 
 void add_entries_back_to_change_table(change_map_t& change_map, std::shared_ptr<change_map_t>& removed_entries) {

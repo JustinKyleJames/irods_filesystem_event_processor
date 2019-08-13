@@ -15,7 +15,7 @@
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/filesystem.hpp>
 
-#include "change_table.capnp.h"
+#include "../../common/change_table.capnp.h"
 
 
 struct change_descriptor {
@@ -23,8 +23,8 @@ struct change_descriptor {
     std::string                   objectId;
     std::string                   parent_objectId;
     std::string                   object_name;
-    std::string                   beegfs_path;     // the beegfs_path can be ascertained by the parent_fid and object_name
-                                                   // however, if a parent is moved after calculating the beegfs_path, we 
+    std::string                   physical_path;     // the physical_path can be ascertained by the parent_fid and object_name
+                                                   // however, if a parent is moved after calculating the physical_path, we 
                                                    // may have to look up the path using iRODS metadata
     ChangeDescriptor::EventTypeEnum last_event; 
     time_t                        timestamp;
@@ -64,32 +64,32 @@ typedef boost::multi_index::multi_index_container<
 
 
 // This is only to faciliate writing the objectId to the root directory 
-int beegfs_write_objectId_to_root_dir(const std::string& beegfs_root_path, const std::string& objectId, change_map_t& change_map);
+int write_objectId_to_root_dir(const std::string& root_path, const std::string& objectId, change_map_t& change_map);
 
-int beegfs_close(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
-int beegfs_mkdir(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
-int beegfs_rmdir(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
-int beegfs_unlink(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
-int beegfs_rename(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, const std::string& old_beegfs_path, 
+int handle_close(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
+int handle_mkdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
+int handle_rmdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
+int handle_unlink(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
+int handle_rename(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, const std::string& old_physical_path, 
                      change_map_t& change_map);
-int beegfs_create(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
-int beegfs_mtime(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
-int beegfs_trunc(unsigned long long cr_index, const std::string& beegfs_root_path, const std::string& objectId, const std::string& parent_objectId,
-                     const std::string& object_name, const std::string& beegfs_path, change_map_t& change_map);
+int handle_create(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
+int handle_mtime(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
+int handle_trunc(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
+                     const std::string& object_name, const std::string& physical_path, change_map_t& change_map);
 
 
 int remove_objectId_from_table(const std::string& objectId, change_map_t& change_map);
 
 size_t get_change_table_size(change_map_t& change_map);
 
-void beegfs_print_change_table(const change_map_t& change_map);
+void print_change_table(const change_map_t& change_map);
 bool entries_ready_to_process(change_map_t& change_map);
 int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& db_file);
 int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::string& db_file);
@@ -99,7 +99,7 @@ int get_update_status_from_capnproto_buf(unsigned char* buf, size_t buflen, std:
 void add_entries_back_to_change_table(change_map_t& change_map, std::shared_ptr<change_map_t>& removed_entries);
 int add_capnproto_buffer_back_to_change_table(unsigned char* buf, size_t buflen, change_map_t& change_map, std::set<std::string>& current_active_objectId_list);
 void remove_objectId_from_active_list(unsigned char* buf, size_t buflen, std::set<std::string>& current_active_objectId_list);
-int write_change_table_to_capnproto_buf(const beegfs_irods_connector_cfg_t *config_struct_ptr, void*& buf, size_t& buflen,
+int write_change_table_to_capnproto_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, void*& buf, size_t& buflen,
                                           change_map_t& change_map, std::set<std::string>& current_active_objectId_list); 
 int get_cr_index(unsigned long long& cr_index, const std::string& db_file);
 int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_file);

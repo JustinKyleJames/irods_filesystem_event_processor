@@ -6,11 +6,9 @@ set(CMAKE_C_COMPILER ${IRODS_EXTERNALS_FULLPATH_CLANG}/bin/clang)
 set(CMAKE_CXX_COMPILER ${IRODS_EXTERNALS_FULLPATH_CLANG}/bin/clang++)
 set (CMAKE_CXX_STANDARD 14)
 
-project(filesystem-event-aggregator C CXX)
+project(beegfs-event-listener C CXX)
 
 find_package(Threads REQUIRED)
-
-include(${IRODS_TARGETS_PATH})
 
 if (NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build {Debug, Release}." FORCE)
@@ -41,13 +39,8 @@ link_libraries(c++abi
     pthread
     dl
     rt
-    irods_client
-    irods_common
-    irods_plugin_dependencies
-    capnp
     kj
     zmq
-    sqlite3
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_program_options.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_thread.so
@@ -60,20 +53,18 @@ include_directories(/usr/include/irods
     ${IRODS_EXTERNALS_FULLPATH_CLANG}/include/c++/v1 
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/include
     ${CMAKE_SOURCE_DIR}/src/
+    ${CMAKE_SOURCE_DIR}/../common
     /opt/irods-externals/cppzmq4.1-0/include
     /opt/irods-externals/jansson2.7-0/include
     /home/jjames/v7/event_listener/include)
 
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
-add_executable(filesystem_event_aggregator ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.c++ ${PROJECT_SOURCE_DIR}/src/change_table.cpp ${PROJECT_SOURCE_DIR}/src/irods_ops.cpp ${PROJECT_SOURCE_DIR}/src/config.cpp ${PROJECT_SOURCE_DIR}/src/main.cpp)
+add_executable(beegfs_event_listener ${PROJECT_SOURCE_DIR}/src/config.cpp ${PROJECT_SOURCE_DIR}/src/main.cpp)
 
-set_target_properties(filesystem_event_aggregator PROPERTIES LINKER_LANGUAGE CXX)
+set_target_properties(beegfs_event_listener PROPERTIES LINKER_LANGUAGE CXX)
 
-add_custom_command(TARGET filesystem_event_aggregator PRE_BUILD
+add_custom_command(TARGET beegfs_event_listener PRE_BUILD
                        COMMAND ${CMAKE_COMMAND} -E copy
-                       ${CMAKE_SOURCE_DIR}/src/filesystem_event_aggregator_config.json ${CMAKE_CURRENT_BINARY_DIR}/filesystem_event_aggregator_config.json)
-
-add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.c++  ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.h
-    COMMAND capnp compile -oc++:${PROJECT_SOURCE_DIR}/../common --src-prefix=${PROJECT_SOURCE_DIR}/../common ${PROJECT_SOURCE_DIR}/../common/change_table.capnp)
+                       ${CMAKE_SOURCE_DIR}/src/beegfs_event_listener_config.json ${CMAKE_CURRENT_BINARY_DIR}/beegfs_event_listener_config.json)
 
