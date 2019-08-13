@@ -52,23 +52,23 @@
 #include "irods_event_operations.hpp"
 
 
-int call_irodsBeegfsApiInp_irodsBeegfsApiOut( irods::api_entry* _api, 
+int call_irodsFsEventApiInp_irodsFsEventApiOut( irods::api_entry* _api, 
                             rsComm_t*  _comm,
-                            irodsBeegfsApiInp_t* _inp, 
-                            irodsBeegfsApiOut_t** _out ) {
+                            irodsFsEventApiInp_t* _inp, 
+                            irodsFsEventApiOut_t** _out ) {
     return _api->call_handler<
-               irodsBeegfsApiInp_t*,
-               irodsBeegfsApiOut_t** >(
+               irodsFsEventApiInp_t*,
+               irodsFsEventApiOut_t** >(
                    _comm,
                    _inp,
                    _out );
 }
 
 #ifdef RODS_SERVER
-static irods::error serialize_irodsBeegfsApiInp_ptr( boost::any _p, 
+static irods::error serialize_irodsFsEventApiInp_ptr( boost::any _p, 
                                             irods::re_serialization::serialized_parameter_t& _out) {
     try {
-        irodsBeegfsApiInp_t* tmp = boost::any_cast<irodsBeegfsApiInp_t*>(_p);
+        irodsFsEventApiInp_t* tmp = boost::any_cast<irodsFsEventApiInp_t*>(_p);
         if(tmp) {
             _out["buf"] = boost::lexical_cast<std::string>(tmp->buf);
         }
@@ -79,18 +79,18 @@ static irods::error serialize_irodsBeegfsApiInp_ptr( boost::any _p,
     catch ( std::exception& ) {
         return ERROR(
                 INVALID_ANY_CAST,
-                "failed to cast irodsBeegfsApiInp_t ptr" );
+                "failed to cast irodsFsEventApiInp_t ptr" );
     }
 
     return SUCCESS();
-} // serialize_irodsBeegfsApiInp_ptr
+} // serialize_irodsFsEventApiInp_ptr
 
-static irods::error serialize_irodsBeegfsApiOut_ptr_ptr( boost::any _p,
+static irods::error serialize_irodsFsEventApiOut_ptr_ptr( boost::any _p,
                                                 irods::re_serialization::serialized_parameter_t& _out) {
     try {
-        irodsBeegfsApiOut_t** tmp = boost::any_cast<irodsBeegfsApiOut_t**>(_p);
+        irodsFsEventApiOut_t** tmp = boost::any_cast<irodsFsEventApiOut_t**>(_p);
         if(tmp && *tmp ) {
-            irodsBeegfsApiOut_t*  l = *tmp;
+            irodsFsEventApiOut_t*  l = *tmp;
             _out["status"] = boost::lexical_cast<std::string>(l->status);
         }
         else {
@@ -100,26 +100,26 @@ static irods::error serialize_irodsBeegfsApiOut_ptr_ptr( boost::any _p,
     catch ( std::exception& ) {
         return ERROR(
                 INVALID_ANY_CAST,
-                "failed to cast irodsBeegfsApiOut_t ptr" );
+                "failed to cast irodsFsEventApiOut_t ptr" );
     }
 
     return SUCCESS();
-} // serialize_irodsBeegfsApiOut_ptr_ptr
+} // serialize_irodsFsEventApiOut_ptr_ptr
 #endif
 
 
 #ifdef RODS_SERVER
-    #define CALL_IRODS_BEEGFS_API_INP_OUT call_irodsBeegfsApiInp_irodsBeegfsApiOut 
+    #define CALL_IRODS_FS_EVENT_API_INP_OUT call_irodsFsEventApiInp_irodsFsEventApiOut 
 #else
-    #define CALL_IRODS_BEEGFS_API_INP_OUT NULL 
+    #define CALL_IRODS_FS_EVENT_API_INP_OUT NULL 
 #endif
 
 // =-=-=-=-=-=-=-
 // api function to be referenced by the entry
 
-int rs_handle_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsBeegfsApiOut_t** _out ) {
+int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEventApiOut_t** _out ) {
 
-    rodsLog( LOG_NOTICE, "Dynamic API - Beegfs API" );
+    rodsLog( LOG_NOTICE, "Dynamic API - File System Event Handler API" );
 
     // read the serialized input
     const kj::ArrayPtr<const capnp::word> array_ptr{ reinterpret_cast<const capnp::word*>(&(*(_inp->buf))), 
@@ -171,7 +171,7 @@ int rs_handle_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsBeegfsAp
         }
 
         if (irods::CFG_SERVICE_ROLE_PROVIDER != svc_role) {
-            rodsLog(LOG_ERROR, "Error:  Attempting bulk Beegfs operations on a catalog consumer.  Must connect to catalog provider.");
+            rodsLog(LOG_ERROR, "Error:  Attempting bulk operations on a catalog consumer.  Must connect to catalog provider.");
             return CAT_NOT_OPEN;
         }
 
@@ -188,7 +188,7 @@ int rs_handle_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsBeegfsAp
 //    }
 
     // setup the output struct
-    ( *_out ) = ( irodsBeegfsApiOut_t* )malloc( sizeof( irodsBeegfsApiOut_t ) );
+    ( *_out ) = ( irodsFsEventApiOut_t* )malloc( sizeof( irodsFsEventApiOut_t ) );
     ( *_out )->status = 0;
 
     rodsLong_t user_id;
@@ -291,7 +291,7 @@ int rs_handle_records( rsComm_t* _comm, irodsBeegfsApiInp_t* _inp, irodsBeegfsAp
         }
     }
 
-    rodsLog(LOG_NOTICE, "Dynamic Beegfs API - DONE" );
+    rodsLog(LOG_NOTICE, "Dynamic File System Event Handler API - DONE" );
 
     return 0;
 }
@@ -308,14 +308,14 @@ extern "C" {
                                 RODS_API_VERSION, // api version
                                 NO_USER_AUTH,     // client auth
                                 NO_USER_AUTH,     // proxy auth
-                                "IrodsBeegfsApiInp_PI", 0, // in PI / bs flag
-                                "IrodsBeegfsApiOut", 0, // out PI / bs flag
+                                "IrodsFsEventApiInp_PI", 0, // in PI / bs flag
+                                "IrodsFsEventApiOut_PI", 0, // out PI / bs flag
                                 std::function<
-                                    int( rsComm_t*,irodsBeegfsApiInp_t*,irodsBeegfsApiOut_t**)>(
+                                    int( rsComm_t*,irodsFsEventApiInp_t*,irodsFsEventApiOut_t**)>(
                                         rs_handle_records), // operation
 								"rs_handle_records",    // operation name
                                 0,  // null clear fcn
-                                (funcPtr)CALL_IRODS_BEEGFS_API_INP_OUT
+                                (funcPtr)CALL_IRODS_FS_EVENT_API_INP_OUT
                               };
         // =-=-=-=-=-=-=-
         // create an api object
@@ -323,21 +323,21 @@ extern "C" {
 
 #ifdef RODS_SERVER
         irods::re_serialization::add_operation(
-                typeid(irodsBeegfsApiInp_t*),
-                serialize_irodsBeegfsApiInp_ptr );
+                typeid(irodsFsEventApiInp_t*),
+                serialize_irodsFsEventApiInp_ptr );
 
         irods::re_serialization::add_operation(
-                typeid(irodsBeegfsApiOut_t**),
-                serialize_irodsBeegfsApiOut_ptr_ptr );
+                typeid(irodsFsEventApiOut_t**),
+                serialize_irodsFsEventApiOut_ptr_ptr );
 #endif // RODS_SERVER
 
         // =-=-=-=-=-=-=-
         // assign the pack struct key and value
-        api->in_pack_key   = "IrodsBeegfsApiInp_PI";
-        api->in_pack_value = IrodsBeegfsApiInp_PI;
+        api->in_pack_key   = "IrodsFsEventApiInp_PI";
+        api->in_pack_value = IrodsFsEventApiInp_PI;
 
-        api->out_pack_key   = "IrodsBeegfsApiOut_PI";
-        api->out_pack_value = IrodsBeegfsApiOut_PI;
+        api->out_pack_key   = "IrodsFsEventApiOut_PI";
+        api->out_pack_value = IrodsFsEventApiOut_PI;
 
         return api;
 

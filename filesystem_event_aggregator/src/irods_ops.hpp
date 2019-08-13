@@ -12,7 +12,7 @@ class irods_connection {
    rcComm_t *irods_conn;
    explicit irods_connection(unsigned int tnum) : thread_number(tnum), irods_conn(nullptr) {}
    ~irods_connection(); 
-   int send_change_map_to_irods(irodsBeegfsApiInp_t *inp) const;
+   int send_change_map_to_irods(irodsFsEventApiInp_t *inp) const;
    int populate_irods_resc_id(filesystem_event_aggregator_cfg_t *config_struct_ptr);
    int instantiate_irods_connection(const filesystem_event_aggregator_cfg_t *config_struct_ptr, int thread_number);
 };

@@ -133,6 +133,9 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, un
 
     std::string event_type;
 
+    bool skip_event = false;
+
+
     switch (packet.type) {
         case BeeGFS::FileEventType::CREATE:
             event_type = "CREATE";
@@ -158,24 +161,37 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, un
             event_type = "TRUNCATE";
             break;
         default:
+            skip_event = true;
             break;
     }
 
-    create_event(++last_cr_index, event_type, root_path, packet.entryId, packet.parentEntryId, basename, full_target_path, full_path, event);
+    if (skip_event) {
+        return true;
+    }
 
+    create_event(++last_cr_index, event_type, root_path, packet.entryId, packet.parentEntryId, basename, full_target_path, full_path, event);
+    
     // send event  
     zmq::message_t request(sizeof(event));
     memcpy (request.data (), &event, sizeof(event));
     event_aggregator_socket.send (request);
-
+    
     // get the reply
     zmq::message_t reply;
-    event_aggregator_socket.recv (&reply);
+    try {
+        event_aggregator_socket.recv (&reply);
+    } catch (const zmq::error_t& e) {
+        return true;
+    }
 
-    // reply is either OK or ERROR
-    std::string reply_str(static_cast<const char*>(reply.data()));
+    
+    // reply is either CONTINUE or PAUSE 
+    LOG(LOG_INFO, "reply size:  %zu\n", reply.size());
+    std::string reply_str(static_cast<char*>(reply.data()), reply.size());
+    
+    LOG(LOG_INFO, "reply:  %s\n", reply_str.c_str());
 
-    return "OK" == reply_str;
+    return "CONTINUE" == reply_str;
 }
 
 //  Receive 0MQ string from socket and ignore the return 
@@ -256,8 +272,8 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
 
 }
 
-// this is the main changelog reader loop.  It reads changelogs, writes the records to an internal data structure, 
-// and sends groups of changelog records to client updater threads.
+// This is the main changelog reader loop.  It reads changelogs and sends results to the
+// event aggregator.
 void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_struct) {
 
 
@@ -272,7 +288,6 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
     // TODO:  Should we stop reading if iRODS is down.
     //   Pros:  We won't run out of memory on the filesystem_event_processor
     //   Cons:  In BeeGFS if we don't retrieve and event it is lost.
-    //unsigned int number_inflight_messages_limit = config_struct.irods_updater_thread_count * 2;
 
     //unsigned int sleep_period = config_struct.changelog_poll_interval_seconds;
     //
@@ -285,24 +300,28 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
 
         // read events
         using BeeGFS::FileEventReceiver;
-        const auto data = receiver.read(); 
-
-        switch (data.first) {
-            case FileEventReceiver::ReadErrorCode::Success:
-                while (!handle_event(data.second, config_struct.beegfs_root_path, last_cr_index, event_aggregator_socket)) {
-                    // TODO configurable sleep time
-                    sleep(5);
-                }
-                break;
-            case FileEventReceiver::ReadErrorCode::VersionMismatch:
-                LOG(LOG_WARN, "Invalid packet version in BeeGFS event.  Ignoring event.\n");
-                break;
-            case FileEventReceiver::ReadErrorCode::InvalidSize:
-                LOG(LOG_WARN, "Invalid packet size in BeeGFS event.  Ignoring event.\n");
-                break;
-            case FileEventReceiver::ReadErrorCode::ReadFailed:
-                LOG(LOG_WARN, "Read BeeGFS event failed.\n");
-                break;
+         
+        try {
+            const auto data = receiver.read(); 
+            switch (data.first) {
+                case FileEventReceiver::ReadErrorCode::Success:
+                    while (!handle_event(data.second, config_struct.beegfs_root_path, last_cr_index, event_aggregator_socket)) {
+                        // TODO configurable sleep time
+                        sleep(5);
+                    }
+                    break;
+                case FileEventReceiver::ReadErrorCode::VersionMismatch:
+                    LOG(LOG_WARN, "Invalid packet version in BeeGFS event.  Ignoring event.\n");
+                    break;
+                case FileEventReceiver::ReadErrorCode::InvalidSize:
+                    LOG(LOG_WARN, "Invalid packet size in BeeGFS event.  Ignoring event.\n");
+                    break;
+                case FileEventReceiver::ReadErrorCode::ReadFailed:
+                    LOG(LOG_WARN, "Read BeeGFS event failed.\n");
+                    break;
+        }
+        } catch (BeeGFS::FileEventReceiver::exception& e) {
+            LOG(LOG_INFO, "%s\n", e.what());
         }
     }
 }

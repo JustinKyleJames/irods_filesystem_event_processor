@@ -1,6 +1,8 @@
 /*
- * Main routine handling the event loop for the Beegfs changelog reader and
- * the event loop for the iRODS API client.
+ * Main code for the event accumulator.
+ *   - receives events from filesystem
+ *   - accumulates them
+ *   - has threads send batch updates to iRODS 
  */
 
 
@@ -268,7 +270,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
     std::string identity("changetable_readers");
     subscriber.setsockopt(ZMQ_SUBSCRIBE, identity.c_str(), identity.length());
 
-    // set up broadcast publisher for sending pause message to beegfs log reader in case of irods failures
+    // set up broadcast publisher for sending pause message to log reader in case of irods failures
     //zmq::context_t context2(1);
     zmq::socket_t publisher(context, ZMQ_PUB);
     LOG(LOG_DBG, "client (%u) publisher conn_str = %s\n", thread_number, config_struct_ptr->changelog_reader_broadcast_address.c_str());
@@ -305,7 +307,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
         if (!irods_error_detected && bytes_received > 0) {
 
-            irodsBeegfsApiInp_t inp {};
+            irodsFsEventApiInp_t inp {};
             inp.buf = static_cast<unsigned char*>(message.data());
             inp.buflen = message.size(); 
 
@@ -511,12 +513,17 @@ int main(int argc, char *argv[]) {
     socket.bind (config_struct.event_aggregator_address);
 
     unsigned long long last_cr_index = 0;
-    while (true) {
+    while (keep_running.load()) {
 
         zmq::message_t request;
 
         //  Wait for next request from client
-        socket.recv (&request);
+        try {
+            socket.recv(&request);
+        } catch (const zmq::error_t& e) {
+            continue;
+        }
+
 
         serialized_filesystem_event_t event;
         memcpy(&event, request.data(), sizeof(serialized_filesystem_event_t));
@@ -534,14 +541,9 @@ int main(int argc, char *argv[]) {
 
         // reply to continue reading
         zmq::message_t reply (8);
-        memcpy (reply.data (), "CONTINUE", 5); 
+        memcpy (reply.data (), "CONTINUE", 8); 
         socket.send (reply);
     }
-
- 
-
-
-
 
     // send message to threads to terminate
     LOG(LOG_DBG, "sending terminate message to clients\n");

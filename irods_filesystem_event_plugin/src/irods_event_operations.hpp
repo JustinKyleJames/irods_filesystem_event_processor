@@ -40,8 +40,8 @@
 #pragma pop_macro("LIST")
 #pragma pop_macro("ERROR")
 
-#ifndef IRODS_BEEGFS_OPERATIONS_H
-#define IRODS_BEEGFS_OPERATIONS_H
+#ifndef IRODS_FILESYSTEM_EVENT_OPERATIONS_H
+#define IRODS_FILESYSTEM_EVENT_OPERATIONS_H
 
 void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 

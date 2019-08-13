@@ -425,8 +425,8 @@ int remove_objectId_from_table(const std::string& objectId, change_map_t& change
 // This is just a debugging function
 void write_change_table_to_str(const change_map_t& change_map, std::string& buffer) {
 
-    boost::format change_record_header_format_obj("%-15s %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-15s %-10s\n");
-    boost::format change_record_format_obj("%015u %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-15s %lu\n");
+    boost::format change_record_header_format_obj("%-15s %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %-10s\n");
+    boost::format change_record_format_obj("%015u %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %lu\n");
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -435,10 +435,10 @@ void write_change_table_to_str(const change_map_t& change_map, std::string& buff
 
     char time_str[18];
 
-    buffer = str(change_record_header_format_obj % "CR_INDEX" % "FIDSTR" % "PARENT_FIDSTR" % "OBJECT_TYPE" % "OBJECT_NAME" % "BEEGFS_PATH" % "TIME" %
+    buffer = str(change_record_header_format_obj % "CR_INDEX" % "FIDSTR" % "PARENT_FIDSTR" % "OBJECT_TYPE" % "OBJECT_NAME" % "PHYSICAL_PATH" % "TIME" %
             "EVENT_TYPE" % "OPER_COMPLETE?" % "FILE_SIZE");
 
-    buffer += str(change_record_header_format_obj % "--------" % "------" % "-------------" % "-----------"% "-----------" % "-----------" % "----" % 
+    buffer += str(change_record_header_format_obj % "--------" % "------" % "-------------" % "-----------"% "-----------" % "-------------" % "----" % 
             "----------" % "--------------" % "---------");
 
     for (auto iter = change_map_seq.begin(); iter != change_map_seq.end(); ++iter) {

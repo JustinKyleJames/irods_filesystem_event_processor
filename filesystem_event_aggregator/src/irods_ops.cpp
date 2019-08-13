@@ -33,7 +33,7 @@ irods_connection::~irods_connection() {
     irods_conn = nullptr;    
 }
 
-int irods_connection::send_change_map_to_irods(irodsBeegfsApiInp_t *inp) const {
+int irods_connection::send_change_map_to_irods(irodsFsEventApiInp_t *inp) const {
 
 
     LOG(LOG_DBG,"calling send_change_map_to_irods\n");
@@ -63,7 +63,7 @@ int irods_connection::send_change_map_to_irods(irodsBeegfsApiInp_t *inp) const {
         LOG(LOG_ERR, "\nERROR - failed to call our api - %i\n", status);
         returnVal = irods_filesystem_event_processor_error::IRODS_ERROR;
     } else {
-        irodsBeegfsApiOut_t* out = static_cast<irodsBeegfsApiOut_t*>( tmp_out );
+        irodsFsEventApiOut_t* out = static_cast<irodsFsEventApiOut_t*>( tmp_out );
         returnVal = out->status;
     }
 
