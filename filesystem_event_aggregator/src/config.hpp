@@ -18,13 +18,12 @@ typedef struct filesystem_event_aggregator_cfg {
     unsigned int irods_client_connect_failure_retry_seconds;
     std::string irods_client_broadcast_address;
     std::string changelog_reader_broadcast_address;
-    std::string changelog_reader_push_work_address;
     std::string result_accumulator_push_address;
     std::string event_aggregator_address;   // must be the same as the event listener's event_aggregator_address
     unsigned int irods_updater_thread_count;
     unsigned int maximum_records_per_sql_command;
     unsigned int maximum_records_per_update_to_irods;
-    unsigned int maximum_records_to_receive_from_changelog;
+    unsigned int maximum_queued_records;
     unsigned int message_receive_timeout_msec;
 
     // optional parameters for using storage tiering time violation

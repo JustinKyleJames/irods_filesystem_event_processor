@@ -255,7 +255,7 @@ void result_accumulator_main(const filesystem_event_aggregator_cfg_t *config_str
 // irods api client thread main routine
 // this is the main loop that reads the change entries in memory and sends them to iRODS via the API.
 void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struct_ptr,
-        change_map_t* change_map, unsigned int thread_number) {
+        change_map_t* change_map, unsigned int thread_number, std::set<std::string>* active_objectIdentifier_list) {
 
     if (nullptr == change_map || nullptr == config_struct_ptr) {
         LOG(LOG_ERR, "irods api client received a nullptr and is exiting.");
@@ -276,12 +276,6 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
     LOG(LOG_DBG, "client (%u) publisher conn_str = %s\n", thread_number, config_struct_ptr->changelog_reader_broadcast_address.c_str());
     publisher.connect(config_struct_ptr->changelog_reader_broadcast_address.c_str());
 
-    // set up receiver for receiving update jobs 
-    zmq::socket_t receiver(context, ZMQ_PULL);
-    receiver.setsockopt(ZMQ_RCVTIMEO, config_struct_ptr->message_receive_timeout_msec);
-    LOG(LOG_DBG, "client (%u) push work conn_str = %s\n", thread_number, config_struct_ptr->changelog_reader_push_work_address.c_str());
-    receiver.connect(config_struct_ptr->changelog_reader_push_work_address.c_str());
-
     // set up sender for sending update result status
     zmq::socket_t sender(context, ZMQ_PUSH);
     LOG(LOG_DBG, "client (%u) push results conn_str = %s\n", thread_number, config_struct_ptr->result_accumulator_push_address.c_str());
@@ -292,69 +286,91 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
     while (!quit) {
 
-        zmq::message_t message;
 
         // initiate a connection object
         irods_connection conn(thread_number);
 
-        size_t bytes_received = 0;
-        try {
-            bytes_received = receiver.recv(&message);
-        } catch (const zmq::error_t& e) {
-             bytes_received = 0;
-        } 
+
+        // TODO continue
+        while (entries_ready_to_process(*change_map)) {
+
+            LOG(LOG_DBG, "Client (%u) getting entries from changemap\n", thread_number);
+
+            // get records ready to be processed into buf and buflen
+            void *buf = nullptr;
+            size_t buflen;
+            int rc = write_change_table_to_capnproto_buf(config_struct_ptr, buf, buflen,
+                    *change_map, *active_objectIdentifier_list);
 
 
-        if (!irods_error_detected && bytes_received > 0) {
-
-            irodsFsEventApiInp_t inp {};
-            inp.buf = static_cast<unsigned char*>(message.data());
-            inp.buflen = message.size(); 
-
-            LOG(LOG_INFO, "irods client (%u): received message of length %d\n", thread_number, inp.buflen);
-
-            if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number )) {
-
-                // send to irods
-                if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
-                    irods_error_detected = true;
-                }
-            } else {
-                irods_error_detected = true;
+            // if we had a collision (meaning a dependency was encountered) avoid a busy-wait by breaking out of the
+            // loop where we can sleep
+            if (rc == irods_filesystem_event_processor_error::COLLISION_IN_FIDSTR) {
+                LOG(LOG_INFO, "Client (%u) ----- Collision!  Breaking out -----\n", thread_number);
+                break;
             }
 
-            if (irods_error_detected) {
+			if (!irods_error_detected && buflen > 0) {
 
-                // irods was previous up but now is down
+				irodsFsEventApiInp_t inp {};
+				inp.buf = static_cast<unsigned char*>(buf);
+				inp.buflen = buflen; 
 
-                // send message to changelog reader to pause reading changelog
-                LOG(LOG_DBG, "irods client (%u): sending pause message to changelog_reader\n", thread_number);
-                s_sendmore(publisher, "changelog_reader");
-                std::string msg = str(boost::format("pause:%u") % thread_number);
-                s_send(publisher, msg.c_str());
+				if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number )) {
 
-                // update the status to fail and send to accumulator
-                unsigned char *buf = static_cast<unsigned char*>(message.data());
-                size_t bufflen = message.size();
-                set_update_status_in_capnproto_buf(buf, bufflen, "FAIL");
-                zmq::message_t response_message(bufflen);
-                memcpy(static_cast<char*>(response_message.data()), buf, bufflen);
-                sender.send(response_message);
-                free(buf);
+					// send to irods
+                    LOG(LOG_DBG, "Client (%u) send changemap to iRODS\n", thread_number);
+					if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
+                        LOG(LOG_DBG, "Client (%u) received error from iRODS\n", thread_number);
+						irods_error_detected = true;
+                        break;
+					}
+                    LOG(LOG_DBG, "Client (%u) changemap successfully sent to iRODS\n", thread_number);
+				} else {
+					irods_error_detected = true;
+                    break;
+				}
 
-            } else {
-                // update the status to pass and send to accumulator
-                unsigned char *buf = static_cast<unsigned char*>(message.data());
-                size_t bufflen = message.size();
-                set_update_status_in_capnproto_buf(buf, bufflen, "PASS");
-                zmq::message_t response_message(bufflen);
-                memcpy(static_cast<char*>(response_message.data()), buf, bufflen);
-                sender.send(response_message);
-                free(buf);
+				if (irods_error_detected) {
 
-           }
+					// irods was previous up but now is down
 
-        }  
+					// send message to changelog reader to pause reading changelog
+					LOG(LOG_DBG, "irods client (%u): sending pause message to changelog_reader\n", thread_number);
+					s_sendmore(publisher, "changelog_reader");
+					std::string msg = str(boost::format("pause:%u") % thread_number);
+					s_send(publisher, msg.c_str());
+
+					// update the status to fail and send to accumulator
+					//unsigned char *buf = static_cast<unsigned char*>(message.data());
+					//size_t bufflen = message.size();
+                    unsigned char *buf2 = static_cast<unsigned char*>(buf);
+					set_update_status_in_capnproto_buf(buf2, buflen, "FAIL");
+					zmq::message_t response_message(buflen);
+					memcpy(static_cast<char*>(response_message.data()), buf2, buflen);
+					sender.send(response_message);
+					free(buf2);
+					free(buf);
+
+				} else {
+					// update the status to pass and send to accumulator
+					//unsigned char *buf = static_cast<unsigned char*>(message.data());
+					//size_t bufflen = message.size();
+                    unsigned char *buf2 = static_cast<unsigned char*>(buf);
+					LOG(LOG_DBG, "irods client (%u): calling set_update_status_in_capnproto_buf\n", thread_number);
+					set_update_status_in_capnproto_buf(buf2, buflen, "PASS");
+					LOG(LOG_DBG, "irods client (%u): done calling set_update_status_in_capnproto_buf\n", thread_number);
+					zmq::message_t response_message(buflen);
+					memcpy(static_cast<char*>(response_message.data()), buf2, buflen);
+					LOG(LOG_DBG, "irods client (%u): sending message to accumulator\n", thread_number);
+					sender.send(response_message);
+					free(buf2);
+					free(buf);
+
+			   }
+
+			}  
+        }
         
         if (irods_error_detected) {
     
@@ -391,6 +407,11 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
             std::string msg = str(boost::format("continue:%u") % thread_number);
             s_sendmore(publisher, "changelog_reader");
             s_send(publisher, msg.c_str());
+
+            // sleep for sleep_period in a 1s loop so we can catch a terminate message
+            for (unsigned int i = 0; i < config_struct_ptr->irods_client_connect_failure_retry_seconds; ++i) {
+                sleep(1);
+            }
         }
 
 
@@ -400,6 +421,9 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
              quit = true;
              break;
         }
+
+        // TODO figure the best way to do this
+        sleep(1);
 
     }
 
@@ -491,10 +515,6 @@ int main(int argc, char *argv[]) {
     std::string identity("changelog_reader");
     subscriber.setsockopt(ZMQ_SUBSCRIBE, identity.c_str(), identity.length());*/
 
-    // start a PUSH notifier to send messages to the iRODS updater threads
-    zmq::socket_t  sender(context, ZMQ_PUSH);
-    sender.bind(config_struct.changelog_reader_push_work_address);
-
     // start accumulator thread which receives results back from iRODS updater threads
     std::thread accumulator_thread(result_accumulator_main, &config_struct, &change_map, &active_objectIdentifier_list); 
 
@@ -503,7 +523,7 @@ int main(int argc, char *argv[]) {
 
     // start up the threads
     for (unsigned int i = 0; i < config_struct.irods_updater_thread_count; ++i) {
-        std::thread t(irods_api_client_main, &config_struct, &change_map, i);
+        std::thread t(irods_api_client_main, &config_struct, &change_map, i, &active_objectIdentifier_list);
         irods_api_client_thread_list.push_back(std::move(t));
     }
 
@@ -531,18 +551,52 @@ int main(int argc, char *argv[]) {
         printf("Received event: [%zu, %s, %s, %s, %s, %s, %s, %s]\n", event.index, event.event_type, event.root_path,
                 event.entryId, event.targetParentId, event.basename, event.full_target_path, event.full_path);
 
-        last_cr_index = event.index;
+        size_t change_table_size = get_change_table_size(change_map);
+        LOG(LOG_DBG, " change_table size is %zu\n", change_table_size);
 
-        // TODO 
-        //   - see if we've reached the max number of queued events, if so
-        //      - send a PAUSE message to client and do not queue up this message
-        //   - else
-        //      - queue message and send a CONTINUE message
+        if (change_table_size > config_struct.maximum_queued_records) {
 
-        // reply to continue reading
-        zmq::message_t reply (8);
-        memcpy (reply.data (), "CONTINUE", 8); 
-        socket.send (reply);
+            // Reached max number of records we will process, do not queue message
+            // and send a pause message to reader.  Reader responsible to resend.
+            zmq::message_t reply(5);
+            memcpy(reply.data(), "PAUSE", 5);
+            socket.send(reply);
+        } else {
+
+            std::string event_type(event.event_type);
+            std::string root_path(event.root_path);
+            std::string entryId(event.entryId);
+            std::string targetParentId(event.targetParentId);
+            std::string basename(event.basename);
+            std::string full_path(event.full_path);
+            std::string full_target_path(event.full_target_path);
+
+            // write entry to change_map
+            if (event_type == "CREATE") {
+                handle_create(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            } else if (event_type == "CLOSE") {
+                handle_close(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            } else if (event_type == "UNLINK") {
+                handle_unlink(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            } else if (event_type == "MKDIR") {
+                handle_mkdir(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            } else if (event_type == "RMDIR") {
+                handle_rmdir(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            } else if (event_type == "RENAME") {
+                //basename = get_basename(targetPath); 
+                handle_rename(event.index, root_path, entryId, targetParentId, basename, full_target_path, full_path, change_map);
+            } else if (event_type == "TRUNCATE") {
+                handle_trunc(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            } else {
+                LOG(LOG_ERR, "Unknown event type (%s) received from listener.  Skipping...\n", event_type.c_str());
+            }
+
+
+            // reply CONTNUE to inform the reader to continue reading messages 
+            zmq::message_t reply (8);
+            memcpy (reply.data (), "CONTINUE", 8); 
+            socket.send (reply);
+        }
     }
 
     // send message to threads to terminate

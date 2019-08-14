@@ -81,7 +81,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
     std::string irods_updater_thread_count_str;
     std::string maximum_records_per_update_to_irods_str;
     std::string maximum_records_per_sql_command_str;
-    std::string maximum_records_to_receive_from_changelog_str;
+    std::string maximum_queued_records_str;
     std::string message_receive_timeout_msec_str;
     std::string time_violation_setting_str;
 
@@ -110,10 +110,6 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
             LOG(LOG_ERR, "Key changelog_reader_broadcast_address missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
-        if (0 != read_key_from_map(config_map, "changelog_reader_push_work_address", config_struct->changelog_reader_push_work_address)) {
-            LOG(LOG_ERR, "Key changelog_reader_push_work_address missing from %s\n", filename.c_str());
-            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
-        }
         if (0 != read_key_from_map(config_map, "result_accumulator_push_address", config_struct->result_accumulator_push_address)) {
             LOG(LOG_ERR, "Key result_accumulator_push_address missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
@@ -128,16 +124,16 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
             LOG(LOG_ERR, "Key irods_updater_thread_count missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
-        if (0 != read_key_from_map(config_map, "maximum_records_per_update_to_irods", maximum_records_per_update_to_irods_str)) {
-            LOG(LOG_ERR, "Key maximum_records_per_update_to_irods missing from %s\n", filename.c_str());
+        if (0 != read_key_from_map(config_map, "maximum_queued_records", maximum_queued_records_str)) {
+            LOG(LOG_ERR, "Key maximum_queued_records missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "maximum_records_per_sql_command", maximum_records_per_sql_command_str)) {
             LOG(LOG_ERR, "Key maximum_records_per_sql_command missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
-        if (0 != read_key_from_map(config_map, "maximum_records_to_receive_from_changelog", maximum_records_to_receive_from_changelog_str)) {
-            LOG(LOG_ERR, "Key maximum_records_to_receive_from_changelog missing from %s\n", filename.c_str());
+        if (0 != read_key_from_map(config_map, "maximum_records_per_update_to_irods", maximum_records_per_update_to_irods_str)) {
+            LOG(LOG_ERR, "Key maximum_records_per_upate_to_irods missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "message_receive_timeout_msec", message_receive_timeout_msec_str)) {
@@ -243,9 +239,9 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         }
 
         try {
-            config_struct->maximum_records_to_receive_from_changelog = boost::lexical_cast<unsigned int>(maximum_records_to_receive_from_changelog_str);
+            config_struct->maximum_queued_records = boost::lexical_cast<unsigned int>(maximum_queued_records_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse maximum_records_to_receive_from_changelog as an integer.\n");
+            LOG(LOG_ERR, "Could not parse maximum_queued_records as an integer.\n");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 

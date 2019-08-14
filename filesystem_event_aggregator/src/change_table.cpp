@@ -633,7 +633,6 @@ int write_change_table_to_capnproto_buf(const filesystem_event_aggregator_cfg_t 
         
     }
 
-
     LOG(LOG_DBG, "write_count=%lu cnt=%lu\n", write_count, cnt);
 
     kj::Array<capnp::word> array = capnp::messageToFlatArray(message);

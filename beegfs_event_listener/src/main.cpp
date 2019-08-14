@@ -17,6 +17,7 @@
 #include <iostream>
 #include <sysexits.h>
 #include <utility>
+#include <chrono>
 
 // local libraries
 #include "config.hpp"
@@ -44,6 +45,11 @@ std::atomic<bool> keep_running(true);
 
 void interrupt_handler(int dummy) {
     keep_running.store(false);
+}
+
+unsigned long long get_current_time_ns() {
+    using namespace std::chrono;
+    return duration_cast<nanoseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 //  Sends string as 0MQ string, as multipart non-terminal 
@@ -118,7 +124,7 @@ std::string get_basename(const std::string& p1) {
     return path_obj.filename().string();
 }
 
-bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, unsigned long long& last_cr_index, zmq::socket_t& event_aggregator_socket) {
+bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zmq::socket_t& event_aggregator_socket) {
 
     LOG(LOG_DBG, "packet received: [type=%s][path=%s][entryId=%s][parentEntryId=%s][targetPath=%s][targetParentId=%s]\n", 
             to_string(packet.type).c_str(), packet.path.c_str(), packet.entryId.c_str(), packet.parentEntryId.c_str(), 
@@ -169,7 +175,7 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, un
         return true;
     }
 
-    create_event(++last_cr_index, event_type, root_path, packet.entryId, packet.parentEntryId, basename, full_target_path, full_path, event);
+    create_event(get_current_time_ns(), event_type, root_path, packet.entryId, packet.parentEntryId, basename, full_target_path, full_path, event);
     
     // send event  
     zmq::message_t request(sizeof(event));
@@ -282,8 +288,6 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
     zmq::socket_t event_aggregator_socket (context, ZMQ_REQ);
     event_aggregator_socket.connect (config_struct.event_aggregator_address);
 
-    // TODO get last_cr_index
-    unsigned long long last_cr_index = 0;
 
     // TODO:  Should we stop reading if iRODS is down.
     //   Pros:  We won't run out of memory on the filesystem_event_processor
@@ -292,8 +296,13 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
     //unsigned int sleep_period = config_struct.changelog_poll_interval_seconds;
     //
 
-    // TODO add MKDIR event for root path
-
+    // Add MKDIR event for root path and send to event aggregator
+    serialized_filesystem_event_t event;
+    create_event(get_current_time_ns(), "MKDIR", config_struct.beegfs_root_path, "root", "", "", "", config_struct.beegfs_root_path, event);
+    zmq::message_t request(sizeof(event)); 
+    memcpy (request.data (), &event, sizeof(event));
+    event_aggregator_socket.send (request);
+    
     BeeGFS::FileEventReceiver receiver(config_struct.beegfs_socket.c_str());
 
     while (keep_running.load()) {
@@ -305,7 +314,7 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
             const auto data = receiver.read(); 
             switch (data.first) {
                 case FileEventReceiver::ReadErrorCode::Success:
-                    while (!handle_event(data.second, config_struct.beegfs_root_path, last_cr_index, event_aggregator_socket)) {
+                    while (!handle_event(data.second, config_struct.beegfs_root_path, event_aggregator_socket)) {
                         // TODO configurable sleep time
                         sleep(5);
                     }
