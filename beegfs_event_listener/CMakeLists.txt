@@ -46,7 +46,8 @@ link_libraries(c++abi
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_thread.so
     ${IRODS_EXTERNALS_FULLPATH_ZMQ}/lib/libzmq.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so
-    ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_system.so)
+    ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_system.so
+    ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so)
 
 
 include_directories(/usr/include/irods
@@ -54,17 +55,24 @@ include_directories(/usr/include/irods
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/include
     ${CMAKE_SOURCE_DIR}/src/
     ${CMAKE_SOURCE_DIR}/../common
-    /opt/irods-externals/cppzmq4.1-0/include
-    /opt/irods-externals/jansson2.7-0/include
+    ${IRODS_EXTERNALS_FULLPATH_CPPZMQ}/include
+    ${IRODS_EXTERNALS_FULLPATH_JANSSON}/include
+    ${IRODS_EXTERNALS_FULLPATH_AVRO}/include
     /home/jjames/v7/event_listener/include)
 
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
-add_executable(beegfs_event_listener ${PROJECT_SOURCE_DIR}/src/config.cpp ${PROJECT_SOURCE_DIR}/src/main.cpp)
+add_executable(beegfs_event_listener 
+    ${PROJECT_SOURCE_DIR}/src/config.cpp 
+    ${PROJECT_SOURCE_DIR}/src/main.cpp 
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp)
 
 set_target_properties(beegfs_event_listener PROPERTIES LINKER_LANGUAGE CXX)
 
 add_custom_command(TARGET beegfs_event_listener PRE_BUILD
                        COMMAND ${CMAKE_COMMAND} -E copy
                        ${CMAKE_SOURCE_DIR}/src/beegfs_event_listener_config.json ${CMAKE_CURRENT_BINARY_DIR}/beegfs_event_listener_config.json)
+
+add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
+    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp -n fs_event)
 

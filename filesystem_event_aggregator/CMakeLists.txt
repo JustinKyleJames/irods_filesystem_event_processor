@@ -53,20 +53,29 @@ link_libraries(c++abi
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_thread.so
     ${IRODS_EXTERNALS_FULLPATH_ZMQ}/lib/libzmq.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so
-    ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_system.so)
+    ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_system.so
+    ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so)
 
 
 include_directories(/usr/include/irods
     ${IRODS_EXTERNALS_FULLPATH_CLANG}/include/c++/v1 
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/include
     ${CMAKE_SOURCE_DIR}/src/
-    /opt/irods-externals/cppzmq4.1-0/include
-    /opt/irods-externals/jansson2.7-0/include
+    ${CMAKE_SOURCE_DIR}/../common
+    ${IRODS_EXTERNALS_FULLPATH_CPPZMQ}/include
+    ${IRODS_EXTERNALS_FULLPATH_JANSSON}/include
+    ${IRODS_EXTERNALS_FULLPATH_AVRO}/include
     /home/jjames/v7/event_listener/include)
 
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
-add_executable(filesystem_event_aggregator ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.c++ ${PROJECT_SOURCE_DIR}/src/change_table.cpp ${PROJECT_SOURCE_DIR}/src/irods_ops.cpp ${PROJECT_SOURCE_DIR}/src/config.cpp ${PROJECT_SOURCE_DIR}/src/main.cpp)
+add_executable(filesystem_event_aggregator 
+    ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.c++ 
+    ${PROJECT_SOURCE_DIR}/src/change_table.cpp 
+    ${PROJECT_SOURCE_DIR}/src/irods_ops.cpp 
+    ${PROJECT_SOURCE_DIR}/src/config.cpp 
+    ${PROJECT_SOURCE_DIR}/src/main.cpp 
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp)
 
 set_target_properties(filesystem_event_aggregator PROPERTIES LINKER_LANGUAGE CXX)
 
@@ -77,3 +86,5 @@ add_custom_command(TARGET filesystem_event_aggregator PRE_BUILD
 add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.c++  ${PROJECT_SOURCE_DIR}/../common/change_table.capnp.h
     COMMAND capnp compile -oc++:${PROJECT_SOURCE_DIR}/../common --src-prefix=${PROJECT_SOURCE_DIR}/../common ${PROJECT_SOURCE_DIR}/../common/change_table.capnp)
 
+add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
+        COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp -n fs_event)

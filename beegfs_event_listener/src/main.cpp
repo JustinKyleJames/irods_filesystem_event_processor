@@ -19,12 +19,12 @@
 #include <utility>
 #include <chrono>
 
-// local libraries
+// local headers 
 #include "config.hpp"
 #include "irods_filesystem_event_processor_errors.hpp"
 #include "logging.hpp"
 
-// boost libraries
+// boost headers 
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -34,7 +34,12 @@
 // beegfs headers
 #include "beegfs/beegfs_file_event_log.hpp"
 
-#include "../../common/serialized_filesystem_event.hpp" 
+// common headers
+#include "file_system_event.hpp"
+
+// avro headers
+#include "avro/Encoder.hh"
+#include "avro/Decoder.hh"
 
 static std::mutex inflight_messages_mutex;
 //unsigned int number_inflight_messages = 0;
@@ -50,6 +55,31 @@ void interrupt_handler(int dummy) {
 unsigned long long get_current_time_ns() {
     using namespace std::chrono;
     return duration_cast<nanoseconds>(system_clock::now().time_since_epoch()).count();
+}
+
+std::string serialize_and_send_event(const fs_event::filesystem_event& event, zmq::socket_t& socket) {
+
+    // serialize event with avro
+    std::unique_ptr<avro::OutputStream> out = avro::memoryOutputStream();
+    avro::EncoderPtr e = avro::binaryEncoder();
+    e->init(*out);
+    avro::encode(*e, event); 
+    boost::shared_ptr< std::vector< uint8_t > > data = avro::snapshot( *out );
+
+    // send event to aggregator with zmq 
+    zmq::message_t request(data->size());
+    memcpy(request.data(), data->data(), data->size());
+    socket.send(request);
+    
+    // get the reply
+    zmq::message_t reply;
+    try {
+        socket.recv (&reply);
+    } catch (const zmq::error_t& e) {
+        throw e;
+    }
+
+    return std::string(static_cast<char*>(reply.data()), reply.size());
 }
 
 //  Sends string as 0MQ string, as multipart non-terminal 
@@ -130,41 +160,40 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zm
             to_string(packet.type).c_str(), packet.path.c_str(), packet.entryId.c_str(), packet.parentEntryId.c_str(), 
             packet.targetPath.c_str(), packet.targetParentId.c_str());
 
-
-    std::string full_path = concatenate_paths_with_boost(root_path, packet.path);
-    std::string basename = get_basename(packet.path);
-    std::string full_target_path;
-
-    serialized_filesystem_event_t event;
-
-    std::string event_type;
+    // populate event to send to even aggregator 
+    fs_event::filesystem_event event;
+    event.index = get_current_time_ns();
+    event.root_path = root_path;
+    event.entryId = packet.entryId;
+    event.targetParentId = packet.parentEntryId;
+    event.basename = get_basename(packet.path);
+    event.full_path = concatenate_paths_with_boost(root_path, packet.path);
 
     bool skip_event = false;
 
-
     switch (packet.type) {
         case BeeGFS::FileEventType::CREATE:
-            event_type = "CREATE";
+            event.event_type = "CREATE";
             break;
         case BeeGFS::FileEventType::CLOSE_WRITE:
-            event_type = "CLOSE";
+            event.event_type = "CLOSE";
             break;
         case BeeGFS::FileEventType::UNLINK:
-            event_type = "UNLINK";
+            event.event_type = "UNLINK";
             break;
         case BeeGFS::FileEventType::MKDIR:
-            event_type = "MKDIR";
+            event.event_type = "MKDIR";
             break;
         case BeeGFS::FileEventType::RMDIR:
-            event_type = "RMDIR";
+            event.event_type = "RMDIR";
             break;
         case BeeGFS::FileEventType::RENAME:
-            event_type = "RENAME";
-            basename = get_basename(packet.targetPath); 
-            full_target_path = concatenate_paths_with_boost(root_path, packet.targetPath);
+            event.event_type = "RENAME";
+            event.basename = get_basename(packet.targetPath); 
+            event.full_target_path = concatenate_paths_with_boost(root_path, packet.targetPath);
             break;
         case BeeGFS::FileEventType::TRUNCATE:
-            event_type = "TRUNCATE";
+            event.event_type = "TRUNCATE";
             break;
         default:
             skip_event = true;
@@ -175,26 +204,13 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zm
         return true;
     }
 
-    create_event(get_current_time_ns(), event_type, root_path, packet.entryId, packet.parentEntryId, basename, full_target_path, full_path, event);
-    
-    // send event  
-    zmq::message_t request(sizeof(event));
-    memcpy (request.data (), &event, sizeof(event));
-    event_aggregator_socket.send (request);
-    
-    // get the reply
-    zmq::message_t reply;
+    std::string reply_str;
     try {
-        event_aggregator_socket.recv (&reply);
+        reply_str = serialize_and_send_event(event, event_aggregator_socket);
     } catch (const zmq::error_t& e) {
-        return true;
+        return true;  // continue on error
     }
 
-    
-    // reply is either CONTINUE or PAUSE 
-    LOG(LOG_INFO, "reply size:  %zu\n", reply.size());
-    std::string reply_str(static_cast<char*>(reply.data()), reply.size());
-    
     LOG(LOG_INFO, "reply:  %s\n", reply_str.c_str());
 
     return "CONTINUE" == reply_str;
@@ -297,12 +313,22 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
     //
 
     // Add MKDIR event for root path and send to event aggregator
-    serialized_filesystem_event_t event;
-    create_event(get_current_time_ns(), "MKDIR", config_struct.beegfs_root_path, "root", "", "", "", config_struct.beegfs_root_path, event);
-    zmq::message_t request(sizeof(event)); 
-    memcpy (request.data (), &event, sizeof(event));
-    event_aggregator_socket.send (request);
-    
+    fs_event::filesystem_event event;
+    event.index = get_current_time_ns();
+    event.event_type = "MKDIR";
+    event.root_path = config_struct.beegfs_root_path; 
+    event.entryId = "root"; 
+    event.targetParentId = "";
+    event.basename = "";
+    event.full_target_path = "";
+    event.full_path = config_struct.beegfs_root_path;
+
+    // send the event and ignore result
+    try {
+        serialize_and_send_event(event, event_aggregator_socket);
+    } catch (const zmq::error_t& e) {
+    }
+
     BeeGFS::FileEventReceiver receiver(config_struct.beegfs_socket.c_str());
 
     while (keep_running.load()) {
@@ -330,7 +356,7 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
                     break;
         }
         } catch (BeeGFS::FileEventReceiver::exception& e) {
-            LOG(LOG_INFO, "%s\n", e.what());
+            LOG(LOG_ERR, "%s\n", e.what());
         }
     }
 }

@@ -20,26 +20,30 @@
 #include <sysexits.h>
 #include <utility>
 
-// local libraries
+// local headers 
 #include "irods_ops.hpp"
 #include "change_table.hpp"
 #include "config.hpp"
 #include "logging.hpp"
 
-// libraries in common
-#include "../../common/irods_filesystem_event_processor_errors.hpp"
-#include "../../common/serialized_filesystem_event.hpp"
+// common headers 
+#include "irods_filesystem_event_processor_errors.hpp"
+#include "file_system_event.hpp"
 
 // irods libraries
 #include "rodsDef.h"
 #include "inout_structs.h"
 
-// boost libraries
+// boost headers 
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
+
+// avro headers
+#include "avro/Encoder.hh"
+#include "avro/Decoder.hh"
 
 static std::mutex inflight_messages_mutex;
 unsigned int number_inflight_messages = 0;
@@ -423,7 +427,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
         }
 
         // TODO figure the best way to do this
-        sleep(1);
+        sleep(5);
 
     }
 
@@ -545,11 +549,15 @@ int main(int argc, char *argv[]) {
         }
 
 
-        serialized_filesystem_event_t event;
-        memcpy(&event, request.data(), sizeof(serialized_filesystem_event_t));
+        std::auto_ptr<avro::InputStream> in = avro::memoryInputStream( 
+                static_cast<const uint8_t*>(request.data()), request.size() );
+        avro::DecoderPtr dec = avro::binaryDecoder();
+        dec->init(*in);
+        fs_event::filesystem_event event; 
+        avro::decode(*dec, event);
 
-        printf("Received event: [%zu, %s, %s, %s, %s, %s, %s, %s]\n", event.index, event.event_type, event.root_path,
-                event.entryId, event.targetParentId, event.basename, event.full_target_path, event.full_path);
+        printf("Received event: [%zu, %s, %s, %s, %s, %s, %s, %s]\n", event.index, event.event_type.c_str(), event.root_path.c_str(),
+                event.entryId.c_str(), event.targetParentId.c_str(), event.basename.c_str(), event.full_target_path.c_str(), event.full_path.c_str());
 
         size_t change_table_size = get_change_table_size(change_map);
         LOG(LOG_DBG, " change_table size is %zu\n", change_table_size);
@@ -563,34 +571,24 @@ int main(int argc, char *argv[]) {
             socket.send(reply);
         } else {
 
-            std::string event_type(event.event_type);
-            std::string root_path(event.root_path);
-            std::string entryId(event.entryId);
-            std::string targetParentId(event.targetParentId);
-            std::string basename(event.basename);
-            std::string full_path(event.full_path);
-            std::string full_target_path(event.full_target_path);
-
             // write entry to change_map
-            if (event_type == "CREATE") {
-                handle_create(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
-            } else if (event_type == "CLOSE") {
-                handle_close(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
-            } else if (event_type == "UNLINK") {
-                handle_unlink(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
-            } else if (event_type == "MKDIR") {
-                handle_mkdir(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
-            } else if (event_type == "RMDIR") {
-                handle_rmdir(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
-            } else if (event_type == "RENAME") {
-                //basename = get_basename(targetPath); 
-                handle_rename(event.index, root_path, entryId, targetParentId, basename, full_target_path, full_path, change_map);
-            } else if (event_type == "TRUNCATE") {
-                handle_trunc(event.index, root_path, entryId, targetParentId, basename, full_path, change_map);
+            if (event.event_type == "CREATE") {
+                handle_create(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+            } else if (event.event_type == "CLOSE") {
+                handle_close(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+            } else if (event.event_type == "UNLINK") {
+                handle_unlink(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+            } else if (event.event_type == "MKDIR") {
+                handle_mkdir(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+            } else if (event.event_type == "RMDIR") {
+                handle_rmdir(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+            } else if (event.event_type == "RENAME") {
+                handle_rename(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_target_path, event.full_path, change_map);
+            } else if (event.event_type == "TRUNCATE") {
+                handle_trunc(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
             } else {
-                LOG(LOG_ERR, "Unknown event type (%s) received from listener.  Skipping...\n", event_type.c_str());
+                LOG(LOG_ERR, "Unknown event type (%s) received from listener.  Skipping...\n", event.event_type.c_str());
             }
-
 
             // reply CONTNUE to inform the reader to continue reading messages 
             zmq::message_t reply (8);

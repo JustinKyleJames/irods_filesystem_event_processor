@@ -1,0 +1,15 @@
+ {
+     "type": "record",
+     "name": "filesystem_event",
+     "fields" : [
+         {"name": "index", "type": "long"},
+         {"name": "event_type", "type": "string"},
+         {"name": "root_path", "type": "string"},
+         {"name": "entryId", "type": "string"},
+         {"name": "targetParentId", "type": "string"},
+         {"name": "basename", "type": "string"},
+         {"name": "full_target_path", "type": "string"},
+         {"name": "full_path", "type": "string"}
+     ]
+ }
+
