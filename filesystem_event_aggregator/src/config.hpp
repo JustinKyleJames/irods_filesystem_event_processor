@@ -18,7 +18,6 @@ typedef struct filesystem_event_aggregator_cfg {
     unsigned int irods_client_connect_failure_retry_seconds;
     std::string irods_client_broadcast_address;
     std::string changelog_reader_broadcast_address;
-    std::string result_accumulator_push_address;
     std::string event_aggregator_address;   // must be the same as the event listener's event_aggregator_address
     unsigned int irods_updater_thread_count;
     unsigned int maximum_records_per_sql_command;

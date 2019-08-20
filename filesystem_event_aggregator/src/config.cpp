@@ -110,11 +110,6 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
             LOG(LOG_ERR, "Key changelog_reader_broadcast_address missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
-        if (0 != read_key_from_map(config_map, "result_accumulator_push_address", config_struct->result_accumulator_push_address)) {
-            LOG(LOG_ERR, "Key result_accumulator_push_address missing from %s\n", filename.c_str());
-            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
-        }
-
         if (0 != read_key_from_map(config_map, "event_aggregator_address", config_struct->event_aggregator_address)) {
             LOG(LOG_ERR, "Key event_aggregator_address missing from %s\n", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;

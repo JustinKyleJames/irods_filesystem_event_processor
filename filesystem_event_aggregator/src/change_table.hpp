@@ -96,13 +96,11 @@ bool entries_ready_to_process(change_map_t& change_map);
 int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& db_file);
 int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::string& db_file);
 int initiate_change_map_serialization_database(const std::string& db_file);
-int set_update_status_in_avro_buf(const boost::shared_ptr< std::vector<uint8_t>>& old_buffer, const std::string& update_status, boost::shared_ptr< std::vector<uint8_t>>& new_buffer); 
-int get_update_status_from_avro_buf(const unsigned char* buf, const size_t buflen, std::string& update_status);
 int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, boost::shared_ptr< std::vector<uint8_t>>& buffer,
                                           change_map_t& change_map, std::set<std::string>& current_active_objectId_list); 
 void add_entries_back_to_change_table(change_map_t& change_map, std::shared_ptr<change_map_t>& removed_entries);
-int add_avro_buffer_back_to_change_table(const unsigned char* buf, const size_t buflen, change_map_t& change_map, std::set<std::string>& current_active_objectId_list);
-void remove_objectId_from_active_list(unsigned char* buf, size_t buflen, std::set<std::string>& current_active_objectId_list);
+int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, std::set<std::string>& current_active_objectId_list);
+void remove_objectId_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::set<std::string>& current_active_objectId_list);
 int get_cr_index(unsigned long long& cr_index, const std::string& db_file);
 int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_file);
 

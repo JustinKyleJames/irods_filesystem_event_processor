@@ -643,13 +643,12 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
 // If we get a failure, the accumulator needs to add the entry back to the list.
 //int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector< uint8_t > >& data, change_map_t& change_map, std::set<std::string>& active_objectId_list) {
-int add_avro_buffer_back_to_change_table(const unsigned char* buf, const size_t buflen, change_map_t& change_map, std::set<std::string>& active_objectId_list) {
 
+int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, std::set<std::string>& active_objectId_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(
-            static_cast<const uint8_t*>(buf), buflen);
+    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(buffer->data(), buffer->size());
     avro::DecoderPtr dec = avro::binaryDecoder();
     dec->init(*in);
     file_system_event_aggregator::ChangeMap map; 
@@ -681,14 +680,11 @@ int add_avro_buffer_back_to_change_table(const unsigned char* buf, const size_t 
     return irods_filesystem_event_processor_error::SUCCESS;
 }   
 
-void remove_objectId_from_active_list(unsigned char* buf, size_t buflen, std::set<std::string>& active_objectId_list) {
-
+void remove_objectId_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::set<std::string>& active_objectId_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-
-    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(
-            static_cast<const uint8_t*>(buf), buflen);
+    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(buffer->data(), buffer->size());
     avro::DecoderPtr dec = avro::binaryDecoder();
     dec->init(*in);
     file_system_event_aggregator::ChangeMap map; 

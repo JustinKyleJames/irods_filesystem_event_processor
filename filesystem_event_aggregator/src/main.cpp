@@ -1,8 +1,8 @@
 /*
- * Main code for the event accumulator.
+ * Main code for the event aggregator.
  *   - receives events from filesystem
- *   - accumulates them
- *   - has threads send batch updates to iRODS 
+ *   - aggregates them
+ *   - has threads that send batch updates to iRODS 
  */
 
 
@@ -44,9 +44,6 @@
 // avro headers
 #include "avro/Encoder.hh"
 #include "avro/Decoder.hh"
-
-static std::mutex inflight_messages_mutex;
-unsigned int number_inflight_messages = 0;
 
 namespace po = boost::program_options;
 
@@ -179,80 +176,22 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
 
 }
 
-// thread which reads the results from the irods updater threads and updates
-// the change table in memory
-void result_accumulator_main(const filesystem_event_aggregator_cfg_t *config_struct_ptr,
-        change_map_t* change_map, std::set<std::string>* active_objectIdentifier_list) {
+// called by iRODS updater threads to update the the change table in memory
+void update_change_table_with_results(change_map_t* change_map, std::set<std::string>* active_objectIdentifier_list, 
+        boost::shared_ptr< std::vector<uint8_t>> message_buffer, bool status_is_pass) {
 
-    if (nullptr == change_map || nullptr == config_struct_ptr) {
-        LOG(LOG_ERR, "result accumulator received a nullptr and is exiting.");
+    if (nullptr == change_map) {
+        LOG(LOG_ERR, "update_change_table_with_results received a null change_map and is exiting.\n");
         return;
     }
 
-
-    // set up broadcast subscriber for terminate messages 
-    zmq::context_t context(1);  // 1 I/O thread
-    zmq::socket_t subscriber(context, ZMQ_SUB);
-    LOG(LOG_DBG, "result_accumulator subscriber conn_str = %s\n", config_struct_ptr->irods_client_broadcast_address.c_str());
-    subscriber.connect(config_struct_ptr->irods_client_broadcast_address);
-    std::string identity("changetable_readers");
-    subscriber.setsockopt(ZMQ_SUBSCRIBE, identity.c_str(), identity.length());
-
-    // set up receiver to receive results
-    zmq::socket_t receiver(context,ZMQ_PULL);
-    receiver.setsockopt(ZMQ_RCVTIMEO, config_struct_ptr->message_receive_timeout_msec);
-    LOG(LOG_DBG, "result_accumulator receiver conn_str = %s\n", config_struct_ptr->result_accumulator_push_address.c_str());
-    receiver.bind(config_struct_ptr->result_accumulator_push_address);
-    receiver.connect(config_struct_ptr->result_accumulator_push_address);
-
-    while (true) {
-        zmq::message_t message;
-
-        size_t bytes_received = 0;
-        try {
-            bytes_received = receiver.recv(&message);
-        } catch (const zmq::error_t& e) {
-            bytes_received = 0;
-        }
-
-        if (bytes_received > 0) {
-
-            {
-                std::lock_guard<std::mutex> lock(inflight_messages_mutex);
-                number_inflight_messages--;
-            }
-
-            LOG(LOG_DBG, "accumulator received message of size: %lu.\n", message.size());
-            unsigned char *buf = static_cast<unsigned char*>(message.data());
-            std::string update_status;
-            get_update_status_from_avro_buf(buf, message.size(), update_status);
-            LOG(LOG_INFO, "accumulator received update status of %s\n", update_status.c_str());
-
-            if (update_status == "FAIL") {
-                add_avro_buffer_back_to_change_table(buf, message.size(), *change_map, *active_objectIdentifier_list);
-            } else {
-                // remove all objectIdentifier from active_objectIdentifier_list 
-                remove_objectId_from_active_list(buf, message.size(), *active_objectIdentifier_list);
-            } 
-            /*char response_flag[5];
-            memcpy(response_flag, message.data(), 4);
-            response_flag[4] = '\0';
-            LOG(LOG_DBG, "response_flag is %s\n", response_flag);
-            unsigned char *tmp= static_cast<unsigned char*>(message.data());
-            unsigned char *response_buffer = tmp + 4;
-
-            if (0 == strcmp(response_flag, "FAIL")) {
-                add_avro_buffer_back_to_change_table(response_buffer, message.size() - 4, *change_map);
-            }*/
-        } 
-
-        if ("terminate" == receive_message(subscriber)) {
-            LOG(LOG_DBG, "result accumulator received a terminate message\n");
-            break;
-        }
-    }
-    LOG(LOG_DBG, "result accumulator exiting\n");
-
+    if (!status_is_pass) {
+        // TODO remove objectId?
+        remove_objectId_from_active_list(message_buffer, *active_objectIdentifier_list);
+        add_avro_buffer_back_to_change_table(message_buffer, *change_map, *active_objectIdentifier_list);
+    } else {
+        remove_objectId_from_active_list(message_buffer, *active_objectIdentifier_list);
+    } 
 
 }
 
@@ -262,7 +201,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
         change_map_t* change_map, unsigned int thread_number, std::set<std::string>* active_objectIdentifier_list) {
 
     if (nullptr == change_map || nullptr == config_struct_ptr) {
-        LOG(LOG_ERR, "irods api client received a nullptr and is exiting.");
+        LOG(LOG_ERR, "irods api client received a nullptr and is exiting.\n");
         return;
     }
 
@@ -280,11 +219,6 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
     LOG(LOG_DBG, "client (%u) publisher conn_str = %s\n", thread_number, config_struct_ptr->changelog_reader_broadcast_address.c_str());
     publisher.connect(config_struct_ptr->changelog_reader_broadcast_address.c_str());
 
-    // set up sender for sending update result status
-    zmq::socket_t sender(context, ZMQ_PUSH);
-    LOG(LOG_DBG, "client (%u) push results conn_str = %s\n", thread_number, config_struct_ptr->result_accumulator_push_address.c_str());
-    sender.connect(config_struct_ptr->result_accumulator_push_address.c_str());
-
     bool quit = false;
     bool irods_error_detected = false;
 
@@ -294,12 +228,11 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
         irods_connection conn(thread_number);
 
 
-        // TODO continue
         while (entries_ready_to_process(*change_map)) {
 
             LOG(LOG_DBG, "Client (%u) getting entries from changemap\n", thread_number);
 
-            // get records ready to be processed into buf and buflen
+            // get records ready to be processed into serialized buffer 
             boost::shared_ptr< std::vector<uint8_t>> buffer;
             int rc = write_change_table_to_avro_buf(config_struct_ptr, buffer,
                     *change_map, *active_objectIdentifier_list);
@@ -325,12 +258,10 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 					if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
                         LOG(LOG_DBG, "Client (%u) received error from iRODS\n", thread_number);
 						irods_error_detected = true;
-                        break;
 					}
-                    LOG(LOG_DBG, "Client (%u) changemap successfully sent to iRODS\n", thread_number);
+                    LOG(LOG_DBG, "Client (%u) iRODS responded with success\n", thread_number);
 				} else {
 					irods_error_detected = true;
-                    break;
 				}
 
 				if (irods_error_detected) {
@@ -343,29 +274,22 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 					std::string msg = str(boost::format("pause:%u") % thread_number);
 					s_send(publisher, msg.c_str());
 
-					// update the status to fail and send to accumulator
-                    boost::shared_ptr< std::vector<uint8_t>> new_buffer;
-					set_update_status_in_avro_buf(buffer, "FAIL", new_buffer);
-					zmq::message_t response_message(new_buffer->size());
-					memcpy(static_cast<char*>(response_message.data()), new_buffer->data(), new_buffer->size());
-					sender.send(response_message);
+					// add entries back to change table 
+                    remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
+
+                    LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table\n");
+                    add_avro_buffer_back_to_change_table(buffer, *change_map, *active_objectIdentifier_list);
+                    break;
 				} else {
-					// update the status to pass and send to accumulator
-                    boost::shared_ptr< std::vector<uint8_t>> new_buffer;
-					LOG(LOG_DBG, "irods client (%u): calling set_update_status_in_avro_buf\n", thread_number);
-					set_update_status_in_avro_buf(buffer, "PASS", new_buffer);
-					LOG(LOG_DBG, "irods client (%u): done calling set_update_status_in_avro_buf\n", thread_number);
-					zmq::message_t response_message(new_buffer->size());
-					memcpy(static_cast<char*>(response_message.data()), new_buffer->data(), new_buffer->size());
-					LOG(LOG_DBG, "irods client (%u): sending message to accumulator\n", thread_number);
-					sender.send(response_message);
-			   }
+                    remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
+                }
 
 			}  
         }
         
         if (irods_error_detected) {
     
+		    LOG(LOG_DBG, "irods client (%u): entering error state\n", thread_number);
             // in a failure state, remain here until we have detected that iRODS is back up
 
             // try a connection in a loop until irods is back up. 
@@ -391,6 +315,8 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
                 //sleep_period = sleep_period << 1;
 
             } while (0 != conn.instantiate_irods_connection(config_struct_ptr, thread_number )); 
+
+		    LOG(LOG_DBG, "irods client (%u): leaving error state\n", thread_number);
             
             // irods is back up, set status and send a message to the changelog reader
             
@@ -499,17 +425,6 @@ int main(int argc, char *argv[]) {
     LOG(LOG_DBG, "main publisher conn_str = %s\n", config_struct.irods_client_broadcast_address.c_str());
     publisher.bind(config_struct.irods_client_broadcast_address);
 
-    // start another pub/sub which is used for clients to send a stop reading
-    // events message if iRODS is down
-    /*zmq::socket_t subscriber(context, ZMQ_SUB);
-    LOG(LOG_DBG, "main subscriber conn_str = %s\n", config_struct.changelog_reader_broadcast_address.c_str());
-    subscriber.bind(config_struct.changelog_reader_broadcast_address);
-    std::string identity("changelog_reader");
-    subscriber.setsockopt(ZMQ_SUBSCRIBE, identity.c_str(), identity.length());*/
-
-    // start accumulator thread which receives results back from iRODS updater threads
-    std::thread accumulator_thread(result_accumulator_main, &config_struct, &change_map, &active_objectIdentifier_list); 
-
     // create a vector of irods client updater threads 
     std::vector<std::thread> irods_api_client_thread_list;
 
@@ -590,12 +505,9 @@ int main(int argc, char *argv[]) {
     s_sendmore(publisher, "changetable_readers");
     s_send(publisher, "terminate"); 
 
-    //irods_api_client_thread.join();
     for (auto iter = irods_api_client_thread_list.begin(); iter != irods_api_client_thread_list.end(); ++iter) {
         iter->join();
     }
-
-    accumulator_thread.join();
 
     LOG(LOG_DBG, "serializing change_map to database\n");
     if (serialize_change_map_to_sqlite(change_map, "filesystem_event_aggregator") < 0) {

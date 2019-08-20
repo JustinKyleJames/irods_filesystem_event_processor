@@ -6,8 +6,6 @@
         "irods_client_broadcast_address": "ipc:///irods_client_broadcast_events",
         "changelog_reader_broadcast_address": "ipc:///changelog_reader_broadcast_events",
         "event_aggregator_address": "ipc:///changelog_reader_push_work_events",
-        "result_accumulator_push_address": "ipc:///result_accumulator_push_address",
-        "event_aggregator_address": "ipc:///changelog_reader_push_work_events",
         "irods_updater_thread_count": 5,
         "maximum_records_per_update_to_irods": 200,
         "maximum_records_per_sql_command": 1,

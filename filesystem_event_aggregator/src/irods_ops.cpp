@@ -164,6 +164,7 @@ int irods_connection::instantiate_irods_connection(const filesystem_event_aggreg
     LOG(LOG_DBG, "irods_conn is %i for thread %d.\n", irods_conn != nullptr, thread_number);
 
     if (nullptr == irods_conn) {
+        LOG(LOG_DBG, "returning IRODS_CONNECTION_ERROR %d.\n", thread_number);
         return irods_filesystem_event_processor_error::IRODS_CONNECTION_ERROR;
     }
 
@@ -172,9 +173,11 @@ int irods_connection::instantiate_irods_connection(const filesystem_event_aggreg
         rcDisconnect(irods_conn);
         irods_conn = nullptr;
         LOG(LOG_ERR, "Error on clientLogin() - %i\n", status);
+        LOG(LOG_DBG, "returning IRODS_ERROR %d.\n", thread_number);
         return irods_filesystem_event_processor_error::IRODS_ERROR;
     }
 
+    LOG(LOG_DBG, "returning SUCCESS %d.\n", thread_number);
     return 0;
 }
 
