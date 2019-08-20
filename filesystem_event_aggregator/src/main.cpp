@@ -225,11 +225,11 @@ void result_accumulator_main(const filesystem_event_aggregator_cfg_t *config_str
             LOG(LOG_DBG, "accumulator received message of size: %lu.\n", message.size());
             unsigned char *buf = static_cast<unsigned char*>(message.data());
             std::string update_status;
-            get_update_status_from_capnproto_buf(buf, message.size(), update_status);
+            get_update_status_from_avro_buf(buf, message.size(), update_status);
             LOG(LOG_INFO, "accumulator received update status of %s\n", update_status.c_str());
 
             if (update_status == "FAIL") {
-                add_capnproto_buffer_back_to_change_table(buf, message.size(), *change_map, *active_objectIdentifier_list);
+                add_avro_buffer_back_to_change_table(buf, message.size(), *change_map, *active_objectIdentifier_list);
             } else {
                 // remove all objectIdentifier from active_objectIdentifier_list 
                 remove_objectId_from_active_list(buf, message.size(), *active_objectIdentifier_list);
@@ -242,7 +242,7 @@ void result_accumulator_main(const filesystem_event_aggregator_cfg_t *config_str
             unsigned char *response_buffer = tmp + 4;
 
             if (0 == strcmp(response_flag, "FAIL")) {
-                add_capnproto_buffer_back_to_change_table(response_buffer, message.size() - 4, *change_map);
+                add_avro_buffer_back_to_change_table(response_buffer, message.size() - 4, *change_map);
             }*/
         } 
 
@@ -290,7 +290,6 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
     while (!quit) {
 
-
         // initiate a connection object
         irods_connection conn(thread_number);
 
@@ -301,9 +300,8 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
             LOG(LOG_DBG, "Client (%u) getting entries from changemap\n", thread_number);
 
             // get records ready to be processed into buf and buflen
-            void *buf = nullptr;
-            size_t buflen;
-            int rc = write_change_table_to_capnproto_buf(config_struct_ptr, buf, buflen,
+            boost::shared_ptr< std::vector<uint8_t>> buffer;
+            int rc = write_change_table_to_avro_buf(config_struct_ptr, buffer,
                     *change_map, *active_objectIdentifier_list);
 
 
@@ -314,11 +312,11 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
                 break;
             }
 
-			if (!irods_error_detected && buflen > 0) {
+			if (!irods_error_detected && buffer->size() > 0) {
 
 				irodsFsEventApiInp_t inp {};
-				inp.buf = static_cast<unsigned char*>(buf);
-				inp.buflen = buflen; 
+				inp.buf = static_cast<unsigned char*>(buffer->data());
+				inp.buflen = buffer->size(); 
 
 				if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number )) {
 
@@ -346,31 +344,21 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 					s_send(publisher, msg.c_str());
 
 					// update the status to fail and send to accumulator
-					//unsigned char *buf = static_cast<unsigned char*>(message.data());
-					//size_t bufflen = message.size();
-                    unsigned char *buf2 = static_cast<unsigned char*>(buf);
-					set_update_status_in_capnproto_buf(buf2, buflen, "FAIL");
-					zmq::message_t response_message(buflen);
-					memcpy(static_cast<char*>(response_message.data()), buf2, buflen);
+                    boost::shared_ptr< std::vector<uint8_t>> new_buffer;
+					set_update_status_in_avro_buf(buffer, "FAIL", new_buffer);
+					zmq::message_t response_message(new_buffer->size());
+					memcpy(static_cast<char*>(response_message.data()), new_buffer->data(), new_buffer->size());
 					sender.send(response_message);
-					free(buf2);
-					free(buf);
-
 				} else {
 					// update the status to pass and send to accumulator
-					//unsigned char *buf = static_cast<unsigned char*>(message.data());
-					//size_t bufflen = message.size();
-                    unsigned char *buf2 = static_cast<unsigned char*>(buf);
-					LOG(LOG_DBG, "irods client (%u): calling set_update_status_in_capnproto_buf\n", thread_number);
-					set_update_status_in_capnproto_buf(buf2, buflen, "PASS");
-					LOG(LOG_DBG, "irods client (%u): done calling set_update_status_in_capnproto_buf\n", thread_number);
-					zmq::message_t response_message(buflen);
-					memcpy(static_cast<char*>(response_message.data()), buf2, buflen);
+                    boost::shared_ptr< std::vector<uint8_t>> new_buffer;
+					LOG(LOG_DBG, "irods client (%u): calling set_update_status_in_avro_buf\n", thread_number);
+					set_update_status_in_avro_buf(buffer, "PASS", new_buffer);
+					LOG(LOG_DBG, "irods client (%u): done calling set_update_status_in_avro_buf\n", thread_number);
+					zmq::message_t response_message(new_buffer->size());
+					memcpy(static_cast<char*>(response_message.data()), new_buffer->data(), new_buffer->size());
 					LOG(LOG_DBG, "irods client (%u): sending message to accumulator\n", thread_number);
 					sender.send(response_message);
-					free(buf2);
-					free(buf);
-
 			   }
 
 			}  

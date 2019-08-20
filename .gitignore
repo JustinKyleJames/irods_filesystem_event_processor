@@ -1,0 +1,9 @@
+*.o
+*.so
+*.so.*
+*.pem
+*.rpm
+bld
+tags
+common/change_table_avro.hpp
+common/file_system_event.hpp
