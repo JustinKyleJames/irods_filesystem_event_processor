@@ -30,22 +30,10 @@
 #include <iostream>
 #include <vector>
 
-// json header
-//#include <jeayeson/jeayeson.hpp>
-
-// capn proto
-#pragma push_macro("LIST")
-#undef LIST
-
-#pragma push_macro("ERROR")
-#undef ERROR
-
-#include "../../common/change_table.capnp.h"
-#include <capnp/message.h>
-#include <capnp/serialize-packed.h>
-
-#pragma pop_macro("LIST")
-#pragma pop_macro("ERROR")
+// avro
+#include "avro/Encoder.hh"
+#include "avro/Decoder.hh"
+#include "../../common/change_table_avro.hpp"
 
 #include "inout_structs.h"
 #include "database_routines.hpp"
@@ -122,22 +110,24 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
     rodsLog( LOG_NOTICE, "Dynamic API - File System Event Handler API" );
 
     // read the serialized input
-    const kj::ArrayPtr<const capnp::word> array_ptr{ reinterpret_cast<const capnp::word*>(&(*(_inp->buf))), 
-        reinterpret_cast<const capnp::word*>(&(*(_inp->buf + _inp->buflen)))};
-    capnp::FlatArrayMessageReader message(array_ptr);
+    std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(
+            static_cast<const uint8_t*>(_inp->buf), _inp->buflen);
 
-    ChangeMap::Reader changeMap = message.getRoot<ChangeMap>();
-    std::string irods_api_update_type(changeMap.getIrodsApiUpdateType().cStr()); 
+    avro::DecoderPtr dec = avro::binaryDecoder();
+    dec->init(*in);
+    file_system_event_aggregator::ChangeMap changeMap; 
+    avro::decode(*dec, changeMap);
+
+    std::string irods_api_update_type(changeMap.irodsApiUpdateType); 
     bool direct_db_modification_requested = (irods_api_update_type == "direct");
 
     // read and populate the register_map which holds a mapping of physical paths to irods paths
     std::vector<std::pair<std::string, std::string> > register_map;
-    for (RegisterMapEntry::Reader entry : changeMap.getRegisterMap()) {
-        std::string physical_path(entry.getFilePath().cStr());
-        std::string irods_register_path(entry.getIrodsRegisterPath().cStr());
+    for (auto entry : changeMap.registerMap) {
+        std::string physical_path(entry.filePath);
+        std::string irods_register_path(entry.irodsRegisterPath);
         register_map.push_back(std::make_pair(physical_path, irods_register_path));
     }
-
 
 
     int status;
@@ -202,11 +192,11 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
         }
     }
 
-    int64_t resource_id = changeMap.getResourceId();
-    std::string resource_name(changeMap.getResourceName().cStr());
-    int64_t maximum_records_per_sql_command = changeMap.getMaximumRecordsPerSqlCommand(); 
-    bool set_metadata_for_storage_tiering_time_violation = changeMap.getSetMetadataForStorageTieringTimeViolation();
-    std::string metadata_key_for_storage_tiering_time_violation = changeMap.getMetadataKeyForStorageTieringTimeViolation();
+    int64_t resource_id = changeMap.resourceId;
+    std::string resource_name(changeMap.resourceName);
+    int64_t maximum_records_per_sql_command = changeMap.maximumRecordsPerSqlCommand; 
+    bool set_metadata_for_storage_tiering_time_violation = changeMap.setMetadataForStorageTieringTimeViolation;
+    std::string metadata_key_for_storage_tiering_time_violation = changeMap.metadataKeyForStorageTieringTimeViolation;
 
     // for batched file inserts 
     std::vector<std::string> objectIdentifer_list_for_create;
@@ -218,19 +208,19 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
     // for batched file deletes
     std::vector<std::string> objectIdentifer_list_for_unlink;
 
-    for (ChangeDescriptor::Reader entry : changeMap.getEntries()) {
+    for (auto entry : changeMap.entries) {
 
-        const ChangeDescriptor::EventTypeEnum event_type = entry.getEventType();
-        std::string objectIdentifer(entry.getObjectIdentifier().cStr());
-        std::string physical_path(entry.getFilePath().cStr());
-        std::string object_name(entry.getObjectName().cStr());
-        const ChangeDescriptor::ObjectTypeEnum object_type = entry.getObjectType();
-        std::string parent_objectIdentifer(entry.getParentObjectIdentifier().cStr());
-        int64_t file_size = entry.getFileSize();
+        const file_system_event_aggregator::EventTypeEnum event_type = entry.eventType;
+        std::string objectIdentifer(entry.objectIdentifier);
+        std::string physical_path(entry.filePath);
+        std::string object_name(entry.objectName);
+        const file_system_event_aggregator::ObjectTypeEnum object_type = entry.objectType;
+        std::string parent_objectIdentifer(entry.parentObjectIdentifier);
+        int64_t file_size = entry.fileSize;
 
         // Handle changes in iRODS
 
-        if (event_type == ChangeDescriptor::EventTypeEnum::CREATE) {
+        if (event_type == file_system_event_aggregator::EventTypeEnum::CREATE) {
             if (direct_db_modification_requested) {
                 objectIdentifer_list_for_create.push_back(objectIdentifer);
                 physical_path_list.push_back(physical_path);
@@ -242,23 +232,23 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
                         objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                         _comm, icss, user_id, direct_db_modification_requested);
             }
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::MKDIR) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::MKDIR) {
             handle_mkdir(register_map, resource_id, resource_name,
                     objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::OTHER) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::OTHER) {
             handle_other(register_map, resource_id, resource_name,
                     objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::RENAME and object_type == ChangeDescriptor::ObjectTypeEnum::FILE) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::RENAME and object_type == file_system_event_aggregator::ObjectTypeEnum::FILE) {
             handle_rename_file(register_map, resource_id, resource_name,
                     objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::RENAME and object_type == ChangeDescriptor::ObjectTypeEnum::DIR) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::RENAME and object_type == file_system_event_aggregator::ObjectTypeEnum::DIR) {
             handle_rename_dir(register_map, resource_id, resource_name,
                     objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::UNLINK) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::UNLINK) {
             if (direct_db_modification_requested) {
                 objectIdentifer_list_for_unlink.push_back(objectIdentifer);
             } else {
@@ -266,11 +256,11 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
                         objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                         _comm, icss, user_id, direct_db_modification_requested);
             }
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::RMDIR) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::RMDIR) {
             handle_rmdir(register_map, resource_id, resource_name,
                     objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
                     _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == ChangeDescriptor::EventTypeEnum::WRITE_FID) {
+        } else if (event_type == file_system_event_aggregator::EventTypeEnum::WRITE_FID) {
             handle_write_fid(register_map, physical_path, objectIdentifer, _comm, icss, direct_db_modification_requested);
         }
 

@@ -29,7 +29,7 @@ set(
   ${CMAKE_SOURCE_DIR}/src/libirods-filesystem-event-api.cpp
   ${CMAKE_SOURCE_DIR}/src/database_routines.cpp
   ${CMAKE_SOURCE_DIR}/src/irods_event_operations.cpp
-  ${CMAKE_SOURCE_DIR}/../common/change_table.capnp.h
+  ${CMAKE_SOURCE_DIR}/../common/change_table_avro.hpp
   )
 
 set(
@@ -37,7 +37,7 @@ set(
   ${CMAKE_SOURCE_DIR}/src/libirods-filesystem-event-api.cpp
   ${CMAKE_SOURCE_DIR}/src/database_routines.cpp
   ${CMAKE_SOURCE_DIR}/src/irods_event_operations.cpp
-  ${CMAKE_SOURCE_DIR}/../common/change_table.capnp.h
+  ${CMAKE_SOURCE_DIR}/../common/change_table_avro.hpp
   )
 
 set(
@@ -88,6 +88,7 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/include
     ${IRODS_EXTERNALS_FULLPATH_JANSSON}/include
     ${IRODS_EXTERNALS_FULLPATH_ARCHIVE}/include
+    ${IRODS_EXTERNALS_FULLPATH_AVRO}/include
     )
 
   target_link_libraries(
@@ -97,10 +98,9 @@ foreach(PLUGIN ${IRODS_API_PLUGINS})
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_filesystem.so
     ${IRODS_EXTERNALS_FULLPATH_BOOST}/lib/libboost_system.so
     ${IRODS_EXTERNALS_FULLPATH_ARCHIVE}/lib/libarchive.so
+    ${IRODS_EXTERNALS_FULLPATH_AVRO}/lib/libavrocpp.so
     ${OPENSSL_CRYPTO_LIBRARY}
     /usr/lib/irods/plugins/database/lib${DB_TYPE}.so
-    /usr/local/lib/libcapnp.so
-    /usr/local/lib/libkj.so
     ${ODBC_LIBRARY}
     )
 

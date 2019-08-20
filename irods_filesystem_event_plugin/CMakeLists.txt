@@ -1,4 +1,3 @@
-cmake_minimum_required(VERSION 3.5.0 FATAL_ERROR) #CPACK_DEBIAN_<COMPONENT>_PACKAGE_NAME
 
 project(irods-filesystem-event-api C CXX)
 
@@ -140,7 +139,7 @@ endif()
 
 endforeach()
 
-add_custom_command(OUTPUT ${CMAKE_SOURCE_DIR}/../common/change_table.capnp.h 
-    COMMAND capnp compile -oc++:${CMAKE_SOURCE_DIR}/../common --src-prefix=${CMAKE_SOURCE_DIR}/../common ${CMAKE_SOURCE_DIR}/../common/change_table.capnp)
+add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/change_table_avro.hpp
+        COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/change_table_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/change_table_avro.hpp -n file_system_event_aggregator)
 
 include(CPack) 

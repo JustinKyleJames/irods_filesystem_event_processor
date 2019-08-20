@@ -42,19 +42,11 @@
 #include <iostream>
 #include <vector>
 
-// capn proto
-#pragma push_macro("LIST")
-#undef LIST
+// avro
+#include "avro/Encoder.hh"
+#include "avro/Decoder.hh"
+#include "../../common/change_table_avro.hpp"
 
-#pragma push_macro("ERROR")
-#undef ERROR
-
-#include "../../common/change_table.capnp.h"
-#include <capnp/message.h>
-#include <capnp/serialize-packed.h>
-
-#pragma pop_macro("LIST")
-#pragma pop_macro("ERROR")
 
 #include "inout_structs.h"
 #include "database_routines.hpp"
@@ -114,12 +106,7 @@ const std::string unlink_sql = "delete from R_DATA_MAIN where data_id = (select 
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
                    "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
 
-const std::string rmdir_sql = "delete from R_COLL_MAIN where coll_id = (select * from ("
-                   "select R_COLL_MAIN.coll_id "
-                   "from R_COLL_MAIN "
-                   "inner join R_OBJT_METAMAP on R_COLL_MAIN.coll_id = R_OBJT_METAMAP.object_id "
-                   "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
+const std::string rmdir_sql = "delete from R_COLL_MAIN where COLL_NAME = ?";
 
 const std::string get_collection_id_from_objectIdentifier_sql = "select R_COLL_MAIN.coll_id "
                    "from R_COLL_MAIN "
@@ -266,7 +253,7 @@ int get_user_id(rsComm_t* _comm, icatSessionStruct *icss, rodsLong_t& user_id, b
 void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
 
@@ -632,7 +619,7 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
 void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
 
@@ -710,7 +697,7 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
 void handle_other(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
     int status;
@@ -778,7 +765,7 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
 void handle_rename_file(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
     int status;
@@ -873,7 +860,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
 void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
     int status;
@@ -1033,7 +1020,7 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 void handle_unlink(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
     int status;
@@ -1414,12 +1401,24 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
 void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& register_map, 
         const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
         const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
 
     int status;
 
     if (direct_db_access_flag) { 
+
+        std::string irods_path;
+
+        // look up object based on objectIdentifier
+        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", true, irods_path); 
+
+        if (status != 0) {
+            // Log as debug since this is a normal condition when the collection is not in register map.
+            rodsLog(LOG_DEBUG, "Error deleting directory %s.  Error is %i", objectIdentifier.c_str(), status);
+            return;
+        }
+
 
         // delete the metadata on the collection 
         cllBindVars[0] = objectIdentifier.c_str();
@@ -1429,6 +1428,16 @@ void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& regis
         if (status != 0) {
             // Couldn't delete metadata.  Just log and return.
             rodsLog(LOG_ERROR, "Error deleting metadata from collection %s.  Error is %i", objectIdentifier.c_str(), status);
+        }
+
+        // delete the collection
+        cllBindVars[0] = irods_path.c_str();
+        cllBindVarCount = 1;
+        status = cmlExecuteNoAnswerSql(rmdir_sql.c_str(), icss);
+
+        if (status != 0) {
+            // Couldn't delete collection.  Just log and return.
+            rodsLog(LOG_ERROR, "Error deleting collection %s.  Error is %i", irods_path.c_str(), status);
         }
 
 #if !defined(COCKROACHDB_ICAT)

@@ -33,9 +33,7 @@
 #pragma push_macro("ERROR")
 #undef ERROR
 
-#include "../../common/change_table.capnp.h"
-#include <capnp/message.h>
-#include <capnp/serialize-packed.h>
+#include "../../common/change_table_avro.hpp"
 
 #pragma pop_macro("LIST")
 #pragma pop_macro("ERROR")
@@ -45,7 +43,7 @@
 
 void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_batch_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id,
@@ -56,27 +54,27 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
 
 void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_other(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_rename_file(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_unlink(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_batch_unlink(const std::vector<std::string>& objectIdentifer_list, const int64_t& resource_id, 
@@ -84,7 +82,7 @@ void handle_batch_unlink(const std::vector<std::string>& objectIdentifer_list, c
 
 void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
         const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const ChangeDescriptor::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
+        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
         rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& register_map, const std::string& physical_path, 
