@@ -11,6 +11,8 @@
 #include "logging.hpp"
 #include "irods_filesystem_event_processor_errors.hpp"
 
+thread_local char *thread_identifier;
+
 FILE *dbgstream = stdout;
 int  log_level = LOG_INFO;
 
@@ -18,7 +20,7 @@ int read_key_from_map(const json_map& config_map, const std::string &key, std::s
     auto entry = config_map.find(key);
     if (entry == config_map.end()) {
        if (required) {
-           LOG(LOG_ERR, "Could not find key %s in configuration\n", key.c_str());
+           LOG(LOG_ERR, "Could not find key %s in configuration", key.c_str());
            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
        } else {
            // return error here just indicates the caller should
@@ -67,12 +69,12 @@ bool remove_trailing_slash(std::string& path) {
 int read_config_file(const std::string& filename, beegfs_event_listener_cfg_t *config_struct) {
 
     if ("" == filename) {
-        LOG(LOG_ERR, "read_config_file did not receive a filename\n");
+        LOG(LOG_ERR, "read_config_file did not receive a filename");
         return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
     }
 
     if (nullptr == config_struct) {
-        LOG(LOG_ERR, "Null config_struct sent to %s - %d\n", __FUNCTION__, __LINE__);
+        LOG(LOG_ERR, "Null config_struct sent to %s - %d", __FUNCTION__, __LINE__);
         return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
@@ -80,18 +82,18 @@ int read_config_file(const std::string& filename, beegfs_event_listener_cfg_t *c
         json_map config_map{ json_file{ filename.c_str() } };
 
         if (0 != read_key_from_map(config_map, "beegfs_socket", config_struct->beegfs_socket)) {
-            LOG(LOG_ERR, "Key beegfs_socket missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key beegfs_socket missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
         if (0 != read_key_from_map(config_map, "beegfs_root_path", config_struct->beegfs_root_path)) {
-            LOG(LOG_ERR, "Key beegfs_root_path missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key beegfs_root_path missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         while (remove_trailing_slash(config_struct->beegfs_root_path));
 
         if (0 != read_key_from_map(config_map, "event_aggregator_address", config_struct->event_aggregator_address)) {
-            LOG(LOG_ERR, "Key event_aggregator_address missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key event_aggregator_address missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -107,7 +109,7 @@ int read_config_file(const std::string& filename, beegfs_event_listener_cfg_t *c
         printf("log level set to %i\n", log_level);
 
     } catch (std::exception& e) {
-        LOG(LOG_ERR, "Could not read %s - %s\n", filename.c_str(), e.what());
+        LOG(LOG_ERR, "Could not read %s - %s", filename.c_str(), e.what());
         return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
     }
     return irods_filesystem_event_processor_error::SUCCESS;

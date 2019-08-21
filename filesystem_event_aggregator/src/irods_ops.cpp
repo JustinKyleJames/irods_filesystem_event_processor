@@ -24,11 +24,13 @@
 #include <stdio.h>
 #include <boost/filesystem.hpp>
 
+extern thread_local char *thread_identifier;
+
 irods_connection::~irods_connection() {
     if (irods_conn) {
-        LOG(LOG_DBG, "disconnecting irods - thread %u\n", thread_number);
+        LOG(LOG_DBG, "disconnecting irods");
         rcDisconnect(irods_conn);
-        LOG(LOG_DBG, "done disconnecting irods - thread %u\n", thread_number);
+        LOG(LOG_DBG, "done disconnecting irods");
     }
     irods_conn = nullptr;    
 }
@@ -36,16 +38,16 @@ irods_connection::~irods_connection() {
 int irods_connection::send_change_map_to_irods(irodsFsEventApiInp_t *inp) const {
 
 
-    LOG(LOG_DBG,"calling send_change_map_to_irods\n");
+    LOG(LOG_DBG,"calling send_change_map_to_irods");
 
     if (nullptr == inp) {
-        LOG(LOG_ERR, "Null inp sent to %s - %d\n", __FUNCTION__, __LINE__);
+        LOG(LOG_ERR, "Null inp sent to %s - %d", __FUNCTION__, __LINE__);
         return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }    
 
 
     if (!irods_conn) {
-        LOG(LOG_ERR,"Error:  Called send_change_map_to_irods() without an active irods_conn\n");
+        LOG(LOG_ERR,"Error:  Called send_change_map_to_irods() without an active irods_conn");
         return irods_filesystem_event_processor_error::IRODS_CONNECTION_ERROR;
     }
 
@@ -60,7 +62,7 @@ int irods_connection::send_change_map_to_irods(irodsFsEventApiInp_t *inp) const 
     int returnVal;
 
     if ( status < 0 ) {
-        LOG(LOG_ERR, "\nERROR - failed to call our api - %i\n", status);
+        LOG(LOG_ERR, "ERROR - failed to call our api - %i", status);
         returnVal = irods_filesystem_event_processor_error::IRODS_ERROR;
     } else {
         irodsFsEventApiOut_t* out = static_cast<irodsFsEventApiOut_t*>( tmp_out );
@@ -74,12 +76,12 @@ int irods_connection::send_change_map_to_irods(irodsFsEventApiInp_t *inp) const 
 int irods_connection::populate_irods_resc_id(filesystem_event_aggregator_cfg_t *config_struct_ptr) {
 
     if (nullptr == config_struct_ptr) {
-        LOG(LOG_ERR, "Null config_struct_ptr sent to %s - %d\n", __FUNCTION__, __LINE__);
+        LOG(LOG_ERR, "Null config_struct_ptr sent to %s", __FUNCTION__);
         return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
     if (!irods_conn) {
-        LOG(LOG_ERR,"Error:  Called populate_irods_resc_id() without an active irods_conn\n");
+        LOG(LOG_ERR,"Error:  Called populate_irods_resc_id() without an active irods_conn");
         return irods_filesystem_event_processor_error::IRODS_CONNECTION_ERROR;
     }
 
@@ -99,10 +101,10 @@ int irods_connection::populate_irods_resc_id(filesystem_event_aggregator_cfg_t *
 
     if ( status < 0 || gen_out->rowCnt < 1) {
         if ( CAT_NO_ROWS_FOUND == status ) {
-            LOG(LOG_ERR, "No resource found in iRODS for resc_name %s\n", config_struct_ptr->irods_resource_name.c_str());
+            LOG(LOG_ERR, "No resource found in iRODS for resc_name %s", config_struct_ptr->irods_resource_name.c_str());
             return irods_filesystem_event_processor_error::RESOURCE_NOT_FOUND_ERROR;
         }
-        LOG(LOG_ERR, "Lookup resource id for resource %s returned error\n", config_struct_ptr->irods_resource_name.c_str());
+        LOG(LOG_ERR, "Lookup resource id for resource %s returned error", config_struct_ptr->irods_resource_name.c_str());
         return irods_filesystem_event_processor_error::IRODS_ERROR;
     }
 
@@ -111,7 +113,7 @@ int irods_connection::populate_irods_resc_id(filesystem_event_aggregator_cfg_t *
     if (!resource_ids) {
         clearGenQueryInp(&gen_inp);
         freeGenQueryOut(&gen_out);
-        LOG(LOG_ERR, "Error while translating resource name to resource id\n");
+        LOG(LOG_ERR, "Error while translating resource name to resource id");
         return irods_filesystem_event_processor_error::RESOURCE_NOT_FOUND_ERROR;
     }
 
@@ -120,7 +122,7 @@ int irods_connection::populate_irods_resc_id(filesystem_event_aggregator_cfg_t *
     } catch (std::invalid_argument& e) {
         clearGenQueryInp(&gen_inp);
         freeGenQueryOut(&gen_out);
-        LOG(LOG_ERR, "Error translating resource id returned from iRODS to an integer.\n");
+        LOG(LOG_ERR, "Error translating resource id returned from iRODS to an integer.");
         return irods_filesystem_event_processor_error::INVALID_RESOURCE_ID_ERROR;
     }
 
@@ -159,12 +161,12 @@ int irods_connection::instantiate_irods_connection(const filesystem_event_aggreg
         irods_port = myEnv.rodsPort;
     }
 
-    LOG(LOG_DBG, "rcConnect being called for thread %d.\n", thread_number);
+    LOG(LOG_DBG, "rcConnect being called.");
     irods_conn = rcConnect( irods_host.c_str(), irods_port, myEnv.rodsUserName, myEnv.rodsZone, 1, &errMsg );
-    LOG(LOG_DBG, "irods_conn is %i for thread %d.\n", irods_conn != nullptr, thread_number);
+    LOG(LOG_DBG, "irods_conn is %i.", irods_conn != nullptr);
 
     if (nullptr == irods_conn) {
-        LOG(LOG_DBG, "returning IRODS_CONNECTION_ERROR %d.\n", thread_number);
+        LOG(LOG_DBG, "%s: %s returning IRODS_CONNECTION_ERROR.", __FUNCTION__);
         return irods_filesystem_event_processor_error::IRODS_CONNECTION_ERROR;
     }
 
@@ -172,12 +174,12 @@ int irods_connection::instantiate_irods_connection(const filesystem_event_aggreg
     if (0 != status) {
         rcDisconnect(irods_conn);
         irods_conn = nullptr;
-        LOG(LOG_ERR, "Error on clientLogin() - %i\n", status);
-        LOG(LOG_DBG, "returning IRODS_ERROR %d.\n", thread_number);
+        LOG(LOG_ERR, "Error on clientLogin() - %i", status);
+        LOG(LOG_DBG, "%s returning IRODS_ERROR.", __FUNCTION__);
         return irods_filesystem_event_processor_error::IRODS_ERROR;
     }
 
-    LOG(LOG_DBG, "returning SUCCESS %d.\n", thread_number);
+    LOG(LOG_DBG, "%s returning SUCCESS.", __FUNCTION__);
     return 0;
 }
 

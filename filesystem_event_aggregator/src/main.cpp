@@ -153,7 +153,7 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
         }
 
         if (vm.count("config-file")) {
-            LOG(LOG_DBG,"setting configuration file to %s\n", vm["config-file"].as<std::string>().c_str());
+            LOG(LOG_DBG,"setting configuration file to %s", vm["config-file"].as<std::string>().c_str());
             config_file = vm["config-file"].as<std::string>().c_str();
         }
 
@@ -162,9 +162,9 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
             dbgstream = fopen(log_file.c_str(), "a");
             if (nullptr == dbgstream) {
                 dbgstream = stdout;
-                LOG(LOG_ERR, "could not open log file %s... using stdout instead.\n", optarg);
+                LOG(LOG_ERR, "could not open log file %s... using stdout instead.", optarg);
             } else {
-                LOG(LOG_DBG, "setting log file to %s\n", vm["log-file"].as<std::string>().c_str());
+                LOG(LOG_DBG, "setting log file to %s", vm["log-file"].as<std::string>().c_str());
             }
         }
         return irods_filesystem_event_processor_error::SUCCESS;
@@ -181,7 +181,7 @@ void update_change_table_with_results(change_map_t* change_map, std::set<std::st
         boost::shared_ptr< std::vector<uint8_t>> message_buffer, bool status_is_pass) {
 
     if (nullptr == change_map) {
-        LOG(LOG_ERR, "update_change_table_with_results received a null change_map and is exiting.\n");
+        LOG(LOG_ERR, "update_change_table_with_results received a null change_map and is exiting.");
         return;
     }
 
@@ -200,15 +200,18 @@ void update_change_table_with_results(change_map_t* change_map, std::set<std::st
 void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struct_ptr,
         change_map_t* change_map, unsigned int thread_number, std::set<std::string>* active_objectIdentifier_list) {
 
+	std::string thread_identifier_str = str(boost::format("irods client (%u)") % thread_number);
+    thread_identifier = const_cast<char*>(thread_identifier_str.c_str());
+
     if (nullptr == change_map || nullptr == config_struct_ptr) {
-        LOG(LOG_ERR, "irods api client received a nullptr and is exiting.\n");
+        LOG(LOG_ERR, "irods api client received a nullptr and is exiting.");
         return;
     }
 
     // set up broadcast subscriber for terminate messages
     zmq::context_t context(1);  // 1 I/O thread
     zmq::socket_t subscriber(context, ZMQ_SUB);
-    LOG(LOG_DBG, "client (%u) subscriber conn_str = %s\n", thread_number, config_struct_ptr->irods_client_broadcast_address.c_str());
+    LOG(LOG_DBG, "subscriber conn_str = %s",  config_struct_ptr->irods_client_broadcast_address.c_str());
     subscriber.connect(config_struct_ptr->irods_client_broadcast_address.c_str());
     std::string identity("changetable_readers");
     subscriber.setsockopt(ZMQ_SUBSCRIBE, identity.c_str(), identity.length());
@@ -216,7 +219,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
     // set up broadcast publisher for sending pause message to log reader in case of irods failures
     //zmq::context_t context2(1);
     zmq::socket_t publisher(context, ZMQ_PUB);
-    LOG(LOG_DBG, "client (%u) publisher conn_str = %s\n", thread_number, config_struct_ptr->changelog_reader_broadcast_address.c_str());
+    LOG(LOG_DBG, "publisher conn_str = %s",  config_struct_ptr->changelog_reader_broadcast_address.c_str());
     publisher.connect(config_struct_ptr->changelog_reader_broadcast_address.c_str());
 
     bool quit = false;
@@ -230,7 +233,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
         while (entries_ready_to_process(*change_map)) {
 
-            LOG(LOG_DBG, "Client (%u) getting entries from changemap\n", thread_number);
+            LOG(LOG_DBG, "getting entries from changemap");
 
             // get records ready to be processed into serialized buffer 
             boost::shared_ptr< std::vector<uint8_t>> buffer;
@@ -241,7 +244,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
             // if we had a collision (meaning a dependency was encountered) avoid a busy-wait by breaking out of the
             // loop where we can sleep
             if (rc == irods_filesystem_event_processor_error::COLLISION_IN_FIDSTR) {
-                LOG(LOG_INFO, "Client (%u) ----- Collision!  Breaking out -----\n", thread_number);
+                LOG(LOG_INFO, "----- Collision!  Breaking out -----");
                 break;
             }
 
@@ -251,15 +254,15 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 				inp.buf = static_cast<unsigned char*>(buffer->data());
 				inp.buflen = buffer->size(); 
 
-				if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number )) {
+				if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number)) {
 
 					// send to irods
-                    LOG(LOG_DBG, "Client (%u) send changemap to iRODS\n", thread_number);
+                    LOG(LOG_DBG, "send changemap to iRODS");
 					if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
-                        LOG(LOG_DBG, "Client (%u) received error from iRODS\n", thread_number);
+                        LOG(LOG_DBG, "received error from iRODS");
 						irods_error_detected = true;
 					}
-                    LOG(LOG_DBG, "Client (%u) iRODS responded with success\n", thread_number);
+                    LOG(LOG_DBG, "iRODS responded with success");
 				} else {
 					irods_error_detected = true;
 				}
@@ -269,15 +272,15 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 					// irods was previous up but now is down
 
 					// send message to changelog reader to pause reading changelog
-					LOG(LOG_DBG, "irods client (%u): sending pause message to changelog_reader\n", thread_number);
+					LOG(LOG_DBG, "sending pause message to changelog_reader");
 					s_sendmore(publisher, "changelog_reader");
 					std::string msg = str(boost::format("pause:%u") % thread_number);
 					s_send(publisher, msg.c_str());
 
-					// add entries back to change table 
+					// remove object id's from active list and add entries back to change table 
                     remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
 
-                    LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table\n");
+                    LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table");
                     add_avro_buffer_back_to_change_table(buffer, *change_map, *active_objectIdentifier_list);
                     break;
 				} else {
@@ -289,7 +292,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
         
         if (irods_error_detected) {
     
-		    LOG(LOG_DBG, "irods client (%u): entering error state\n", thread_number);
+		    LOG(LOG_DBG, "entering error state");
             // in a failure state, remain here until we have detected that iRODS is back up
 
             // try a connection in a loop until irods is back up. 
@@ -305,8 +308,8 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
                     // see if there is a quit message, if so terminate
                     if (received_terminate_message(subscriber)) {
-                        LOG(LOG_DBG, "irods client (%u) received a terminate message\n", thread_number);
-                        LOG(LOG_DBG,"irods client (%u) exiting\n", thread_number);
+                        LOG(LOG_DBG, "received a terminate message");
+                        LOG(LOG_DBG, "exiting");
                         return;
                     }
                 }
@@ -316,12 +319,12 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
             } while (0 != conn.instantiate_irods_connection(config_struct_ptr, thread_number )); 
 
-		    LOG(LOG_DBG, "irods client (%u): leaving error state\n", thread_number);
+		    LOG(LOG_DBG, "leaving error state");
             
             // irods is back up, set status and send a message to the changelog reader
             
             irods_error_detected = false;
-            LOG(LOG_DBG, "sending continue message to changelog reader\n");
+            LOG(LOG_DBG, "sending continue message to changelog reader");
             std::string msg = str(boost::format("continue:%u") % thread_number);
             s_sendmore(publisher, "changelog_reader");
             s_send(publisher, msg.c_str());
@@ -335,21 +338,22 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
         // see if there is a quit message, if so terminate
         if (received_terminate_message(subscriber)) {
-             LOG(LOG_DBG, "irods client (%u) received a terminate message\n", thread_number);
+             LOG(LOG_DBG, "received a terminate message");
              quit = true;
              break;
         }
 
-        // TODO figure the best way to do this
         sleep(5);
 
     }
 
-    LOG(LOG_DBG,"irods client (%u) exiting\n", thread_number);
+    LOG(LOG_DBG,"exiting");
 }
 
 
 int main(int argc, char *argv[]) {
+
+    thread_identifier = (char*)"event_aggregator";
 
     std::string config_file = "filesystem_event_aggregator_config.json";
     std::string log_file;
@@ -378,18 +382,18 @@ int main(int argc, char *argv[]) {
         return EX_CONFIG;
     }
 
-    LOG(LOG_DBG, "initializing change_map serialized database\n");
+    LOG(LOG_DBG, "initializing change_map serialized database");
     if (initiate_change_map_serialization_database("filesystem_event_aggregator") < 0) {
-        LOG(LOG_ERR, "failed to initialize serialization database\n");
+        LOG(LOG_ERR, "failed to initialize serialization database");
         return EX_SOFTWARE;
     }
 
     // create the changemap in memory and read from serialized DB
     change_map_t change_map;
 
-    LOG(LOG_DBG, "reading change_map from serialized database\n");
+    LOG(LOG_DBG, "reading change_map from serialized database");
     if (deserialize_change_map_from_sqlite(change_map, "filesystem_event_aggregator") < 0) {
-        LOG(LOG_ERR, "failed to deserialize change map on startup\n");
+        LOG(LOG_ERR, "failed to deserialize change map on startup");
         return EX_SOFTWARE;
     }
 
@@ -402,14 +406,14 @@ int main(int argc, char *argv[]) {
 
         rc = conn.instantiate_irods_connection(nullptr, 0); 
         if (rc < 0) {
-            LOG(LOG_ERR, "instantiate_irods_connection failed.  exiting...\n");
+            LOG(LOG_ERR, "instantiate_irods_connection failed.  exiting...");
             return EX_SOFTWARE;
         }
 
         // read the resource id from resource name
         rc = conn.populate_irods_resc_id(&config_struct); 
         if (rc < 0) {
-            LOG(LOG_ERR, "populate_irods_resc_id returned an error\n");
+            LOG(LOG_ERR, "populate_irods_resc_id returned an error");
             return EX_SOFTWARE;
         }
     }
@@ -422,7 +426,7 @@ int main(int argc, char *argv[]) {
     // start a pub/sub publisher which is used to terminate threads and to send irods up/down messages
     zmq::context_t context(1);
     zmq::socket_t publisher(context, ZMQ_PUB);
-    LOG(LOG_DBG, "main publisher conn_str = %s\n", config_struct.irods_client_broadcast_address.c_str());
+    LOG(LOG_DBG, "main publisher conn_str = %s", config_struct.irods_client_broadcast_address.c_str());
     publisher.bind(config_struct.irods_client_broadcast_address);
 
     // create a vector of irods client updater threads 
@@ -439,6 +443,7 @@ int main(int argc, char *argv[]) {
     zmq::socket_t socket (context2, ZMQ_REP);
     socket.bind (config_struct.event_aggregator_address);
 
+
     unsigned long long last_cr_index = 0;
     while (keep_running.load()) {
 
@@ -451,7 +456,6 @@ int main(int argc, char *argv[]) {
             continue;
         }
 
-
         std::auto_ptr<avro::InputStream> in = avro::memoryInputStream( 
                 static_cast<const uint8_t*>(request.data()), request.size() );
         avro::DecoderPtr dec = avro::binaryDecoder();
@@ -459,11 +463,11 @@ int main(int argc, char *argv[]) {
         fs_event::filesystem_event event; 
         avro::decode(*dec, event);
 
-        printf("Received event: [%zu, %s, %s, %s, %s, %s, %s, %s]\n", event.index, event.event_type.c_str(), event.root_path.c_str(),
+        LOG(LOG_DBG, "Received event: [%zu, %s, %s, %s, %s, %s, %s, %s]", event.index, event.event_type.c_str(), event.root_path.c_str(),
                 event.entryId.c_str(), event.targetParentId.c_str(), event.basename.c_str(), event.full_target_path.c_str(), event.full_path.c_str());
 
         size_t change_table_size = get_change_table_size(change_map);
-        LOG(LOG_DBG, " change_table size is %zu\n", change_table_size);
+        LOG(LOG_DBG, "change_table size is %zu", change_table_size);
 
         if (change_table_size > config_struct.maximum_queued_records) {
 
@@ -490,7 +494,7 @@ int main(int argc, char *argv[]) {
             } else if (event.event_type == "TRUNCATE") {
                 handle_trunc(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
             } else {
-                LOG(LOG_ERR, "Unknown event type (%s) received from listener.  Skipping...\n", event.event_type.c_str());
+                LOG(LOG_ERR, "Unknown event type (%s) received from listener.  Skipping...", event.event_type.c_str());
             }
 
             // reply CONTNUE to inform the reader to continue reading messages 
@@ -501,7 +505,7 @@ int main(int argc, char *argv[]) {
     }
 
     // send message to threads to terminate
-    LOG(LOG_DBG, "sending terminate message to clients\n");
+    LOG(LOG_DBG, "sending terminate message to clients");
     s_sendmore(publisher, "changetable_readers");
     s_send(publisher, "terminate"); 
 
@@ -509,18 +513,18 @@ int main(int argc, char *argv[]) {
         iter->join();
     }
 
-    LOG(LOG_DBG, "serializing change_map to database\n");
+    LOG(LOG_DBG, "serializing change_map to database");
     if (serialize_change_map_to_sqlite(change_map, "filesystem_event_aggregator") < 0) {
-        LOG(LOG_ERR, "failed to serialize change_map upon exit\n");
+        LOG(LOG_ERR, "failed to serialize change_map upon exit");
         fatal_error_detected = true;
     }
 
     if (write_cr_index_to_sqlite(last_cr_index, "filesystem_event_aggregator") < 0) {
-        LOG(LOG_ERR, "failed to write cr_index to database upon exit\n");
+        LOG(LOG_ERR, "failed to write cr_index to database upon exit");
         fatal_error_detected = true;
     }
 
-    LOG(LOG_DBG,"changelog client exiting\n");
+    LOG(LOG_DBG,"%s: changelog client exiting");
     if (stdout != dbgstream) {
         fclose(dbgstream);
     }

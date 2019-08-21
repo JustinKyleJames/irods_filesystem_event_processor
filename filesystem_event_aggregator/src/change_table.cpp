@@ -78,8 +78,8 @@ int handle_close(unsigned long long cr_index, const std::string& fs_mount_path, 
     struct stat st;
     int result = stat(physical_path.c_str(), &st);
 
-    LOG(LOG_DBG, "stat(%s, &st)\n", physical_path.c_str());
-    LOG(LOG_DBG, "handle_close:  stat_result = %i, file_size = %ld\n", result, st.st_size);
+    LOG(LOG_DBG, "stat(%s, &st)", physical_path.c_str());
+    LOG(LOG_DBG, "handle_close:  stat_result = %i, file_size = %ld", result, st.st_size);
 
     auto iter = change_map_objectId.find(objectId);
     if (change_map_objectId.end() != iter) {
@@ -114,7 +114,7 @@ int handle_close(unsigned long long cr_index, const std::string& fs_mount_path, 
 int handle_mkdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
                  const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
-    LOG(LOG_ERR, "handle_mkdir:  parent_objectId=%s\n", parent_objectId.c_str());
+    LOG(LOG_ERR, "handle_mkdir:  parent_objectId=%s", parent_objectId.c_str());
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -262,7 +262,7 @@ int handle_rename(unsigned long long cr_index, const std::string& fs_mount_path,
         change_map.insert(entry);
     }
 
-    LOG(LOG_DBG, "rename:  old_physical_path = %s\n", old_physical_path.c_str());
+    LOG(LOG_DBG, "rename:  old_physical_path = %s", old_physical_path.c_str());
 
     if (is_dir) {
 
@@ -355,7 +355,7 @@ int handle_trunc(unsigned long long cr_index, const std::string& fs_mount_path, 
     struct stat st;
     int result = stat(physical_path.c_str(), &st);
 
-    LOG(LOG_DBG, "handle_trunc:  stat_result = %i, file_size = %ld\n", result, st.st_size);
+    LOG(LOG_DBG, "handle_trunc:  stat_result = %i, file_size = %ld", result, st.st_size);
 
     auto iter = change_map_objectId.find(objectId);
     if(iter != change_map_objectId.end()) {
@@ -397,38 +397,10 @@ int remove_objectId_from_table(const std::string& objectId, change_map_t& change
     return irods_filesystem_event_processor_error::SUCCESS;
 }
 
-// precondition:  result has buffer_size reserved
-/*int concatenate_paths_with_boost(const char *p1, const char *p2, char *result, size_t buffer_size) {
- 
-    if (p1 == nullptr) {
-        LOG(LOG_ERR, "Null p1 in %s - %d\n", __FUNCTION__, __LINE__);    
-        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
-    }
-
-    if (p2 == nullptr) {
-        LOG(LOG_ERR, "Null p2 in %s - %d\n", __FUNCTION__, __LINE__); 
-        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
-    }
-
-    if (result == nullptr) {
-        LOG(LOG_ERR, "Null result in %s - %d\n", __FUNCTION__, __LINE__); 
-        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
-    }
-
-
-    boost::filesystem::path path_obj_1{p1};
-    boost::filesystem::path path_obj_2{p2};
-    boost::filesystem::path path_result(path_obj_1/path_obj_2);
-
-    snprintf(result, buffer_size, "%s", path_result.string().c_str());
-
-    return irods_filesystem_event_processor_error::SUCCESS;
-}*/
-
 // This is just a debugging function
 void write_change_table_to_str(const change_map_t& change_map, std::string& buffer) {
 
-    boost::format change_record_header_format_obj("%-15s %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %-10s\n");
+    boost::format change_record_header_format_obj("\n%-15s %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %-10s\n");
     boost::format change_record_format_obj("%015u %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %lu\n");
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
@@ -473,7 +445,8 @@ void print_change_table(const change_map_t& change_map) {
 // Sets the update status.  
 //
 // TODO:  This does a decode and encode.  
-int set_update_status_in_avro_buf(const boost::shared_ptr< std::vector<uint8_t>>& old_buffer, const std::string& update_status, boost::shared_ptr< std::vector<uint8_t>>& new_buffer) {
+int set_update_status_in_avro_buf(const boost::shared_ptr< std::vector<uint8_t>>& old_buffer, const std::string& update_status, 
+        boost::shared_ptr< std::vector<uint8_t>>& new_buffer) {
 
     std::auto_ptr<avro::InputStream> in = avro::memoryInputStream(old_buffer->data(), old_buffer->size());
     avro::DecoderPtr dec = avro::binaryDecoder();
@@ -520,7 +493,7 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
     std::set<std::string> temp_objectId_list;
 
     if (nullptr == config_struct_ptr) {
-        LOG(LOG_ERR, "Null config_struct_ptr sent to %s - %d\n", __FUNCTION__, __LINE__);
+        LOG(LOG_ERR, "Null config_struct_ptr sent to %s - %d", __FUNCTION__, __LINE__);
         return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
@@ -561,9 +534,9 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
     size_t cnt = 0;
     for (auto iter = change_map_seq.begin(); iter != change_map_seq.end() && cnt < write_count;) { 
 
-        LOG(LOG_DBG, "objectId=%s oper_complete=%i\n", iter->objectId.c_str(), iter->oper_complete);
+        LOG(LOG_DBG, "objectId=%s oper_complete=%i", iter->objectId.c_str(), iter->oper_complete);
 
-        LOG(LOG_DBG, "change_map size = %lu\n", change_map_seq.size()); 
+        LOG(LOG_DBG, "change_map size = %lu", change_map_seq.size()); 
 
         if (iter->oper_complete) {
 
@@ -576,20 +549,20 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
                     iter->last_event == file_system_event_aggregator::EventTypeEnum::RENAME) {
 
                 if (active_objectId_list.find(iter->parent_objectId) != active_objectId_list.end()) {
-                    LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out \n", iter->parent_objectId.c_str());
+                    LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out ", iter->parent_objectId.c_str());
                     collision_in_objectId = true;
                     break;
                 }
             }
 
             if (active_objectId_list.find(iter->objectId) != active_objectId_list.end()) {
-                LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out\n", iter->objectId.c_str());
+                LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out", iter->objectId.c_str());
                 collision_in_objectId = true;
                 break;
             }
 
            
-            LOG(LOG_DBG, "adding objectId %s to active objectId list\n", iter->objectId.c_str());
+            LOG(LOG_DBG, "adding objectId %s to active objectId list", iter->objectId.c_str());
             temp_objectId_list.insert(iter->objectId);
 
             // populate the change_entry and push it onto the map
@@ -605,7 +578,7 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
 
             // **** debug **** 
-            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][physical_path=%s]\n", change_entry.objectIdentifier.c_str(), 
+            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][physical_path=%s]", change_entry.objectIdentifier.c_str(), 
                     change_entry.parentObjectIdentifier.c_str(), change_entry.objectName.c_str(), change_entry.filePath.c_str());
             // *************
             
@@ -616,7 +589,7 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
             ++cnt;
 
-            LOG(LOG_DBG, "after erase change_map size = %lu\n", change_map_seq.size());
+            LOG(LOG_DBG, "after erase change_map size = %lu", change_map_seq.size());
 
         } else {
             ++iter;
@@ -624,12 +597,12 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
         
     }
 
-    LOG(LOG_DBG, "write_count=%lu cnt=%lu\n", write_count, cnt);
+    LOG(LOG_DBG, "write_count=%lu cnt=%lu", write_count, cnt);
 
     avro::encode(*e, map);
     buffer = avro::snapshot( *out );
 
-    LOG(LOG_DBG, "message_size=%lu\n", buffer->size());
+    LOG(LOG_DBG, "message_size=%lu", buffer->size());
 
     // add all fid strings from tmp_objectId to active_objectId_list
     active_objectId_list.insert(temp_objectId_list.begin(), temp_objectId_list.end());
@@ -644,7 +617,8 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 // If we get a failure, the accumulator needs to add the entry back to the list.
 //int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector< uint8_t > >& data, change_map_t& change_map, std::set<std::string>& active_objectId_list) {
 
-int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, std::set<std::string>& active_objectId_list) {
+int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, 
+        std::set<std::string>& active_objectId_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -669,7 +643,7 @@ int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<ui
         record.oper_complete = true;
         record.timestamp = time(NULL);
    
-        LOG(LOG_DBG, "writing entry back to change_map.\n");
+        LOG(LOG_DBG, "writing entry back to change_map.");
 
         change_map.insert(record);
 
@@ -770,8 +744,8 @@ bool entries_ready_to_process(change_map_t& change_map) {
     // get change map indexed on oper_complete 
     auto &change_map_oper_complete = change_map.get<change_descriptor_oper_complete_idx>();
     bool ready = change_map_oper_complete.count(true) > 0;
-    LOG(LOG_DBG, "change map size: = %lu\n", change_map.size());
-    LOG(LOG_DBG, "entries_ready_to_process = %i\n", ready);
+    LOG(LOG_DBG, "change map size: = %lu", change_map.size());
+    LOG(LOG_DBG, "entries_ready_to_process = %i", ready);
     return ready; 
 }
 
@@ -787,7 +761,7 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
     rc = sqlite3_open(serialize_file.c_str(), &db);
 
     if (rc) {
-        LOG(LOG_ERR, "Can't open %s for serialization.\n", serialize_file.c_str());
+        LOG(LOG_ERR, "Can't open %s for serialization.", serialize_file.c_str());
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
@@ -819,7 +793,7 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
 
         rc = sqlite3_step(stmt); 
         if (SQLITE_DONE != rc) {
-            LOG(LOG_ERR, "ERROR inserting data: %s\n", sqlite3_errmsg(db));
+            LOG(LOG_ERR, "ERROR inserting data: %s", sqlite3_errmsg(db));
         }
 
         sqlite3_finalize(stmt);
@@ -833,11 +807,11 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
 static int query_callback_change_map(void *change_map_void_ptr, int argc, char** argv, char** columnNames) {
 
     if (nullptr == change_map_void_ptr) {
-        LOG(LOG_ERR, "Invalid nullptr sent to change_map in %s\n", __FUNCTION__);
+        LOG(LOG_ERR, "Invalid nullptr sent to change_map in %s", __FUNCTION__);
     }
 
     if (10 != argc) {
-        LOG(LOG_ERR, "Invalid number of columns returned from change_map query in database.\n");
+        LOG(LOG_ERR, "Invalid number of columns returned from change_map query in database.");
         return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
@@ -861,7 +835,7 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
         file_size = boost::lexical_cast<off_t>(argv[8]);
         cr_index = boost::lexical_cast<unsigned long long>(argv[9]);
     } catch( boost::bad_lexical_cast const& ) {
-        LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.\n");
+        LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.");
         return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
@@ -880,15 +854,13 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
 static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** argv, char** columnNames) {
 
     if (nullptr == cr_index_void_ptr) {
-        LOG(LOG_ERR, "Invalid nullptr sent to cr_index_ptr in %s\n", __FUNCTION__);
+        LOG(LOG_ERR, "Invalid nullptr sent to cr_index_ptr in %s", __FUNCTION__);
     }
 
     if (1 != argc) {
-        LOG(LOG_ERR, "Invalid number of columns returned from cr_index query in database.\n");
+        LOG(LOG_ERR, "Invalid number of columns returned from cr_index query in database.");
         return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
-
-    LOG(LOG_DBG, "%s - argv[0] = [%s]\n", __FUNCTION__, argv[0]);
 
     unsigned long long *cr_index_ptr = static_cast<unsigned long long*>(cr_index_void_ptr);
 
@@ -898,7 +870,7 @@ static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** arg
         try {
             *cr_index_ptr = boost::lexical_cast<unsigned long long>(argv[0]);
         } catch( boost::bad_lexical_cast const& ) {
-            LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.\n");
+            LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.");
             return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
         }
     }
@@ -908,8 +880,6 @@ static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** arg
 
 int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_file) {
 
-    LOG(LOG_DBG, "%s: cr_index=%llu\n", __FUNCTION__, cr_index);
-
     sqlite3 *db;
     int rc;
 
@@ -917,7 +887,7 @@ int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_
     rc = sqlite3_open(serialize_file.c_str(), &db);
 
     if (rc) {
-        LOG(LOG_ERR, "Can't open %s for serialization.\n", serialize_file.c_str());
+        LOG(LOG_ERR, "Can't open %s for serialization.", serialize_file.c_str());
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
@@ -929,7 +899,7 @@ int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_
     rc = sqlite3_step(stmt); 
 
     if (SQLITE_DONE != rc && SQLITE_CONSTRAINT != rc) {
-        LOG(LOG_ERR, "ERROR inserting data: %s\n", sqlite3_errmsg(db));
+        LOG(LOG_ERR, "ERROR inserting data: %s", sqlite3_errmsg(db));
     }
 
     sqlite3_finalize(stmt);
@@ -949,14 +919,14 @@ int get_cr_index(unsigned long long& cr_index, const std::string& db_file) {
     rc = sqlite3_open(serialize_file.c_str(), &db);
 
     if (rc) {
-        LOG(LOG_ERR, "Can't open %s to read changemap index.\n", serialize_file.c_str());
+        LOG(LOG_ERR, "Can't open %s to read changemap index.", serialize_file.c_str());
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     rc = sqlite3_exec(db, "select max(cr_index) from last_cr_index", query_callback_cr_index, &cr_index, &zErrMsg);
 
     if (rc) {
-        LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s\n", zErrMsg);
+        LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s", zErrMsg);
         sqlite3_close(db);
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
@@ -969,8 +939,6 @@ int get_cr_index(unsigned long long& cr_index, const std::string& db_file) {
 
 int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::string& db_file) {
 
-    LOG(LOG_INFO, "%s:%d (%s) db_file=%s\n", __FILE__, __LINE__, __FUNCTION__, db_file.c_str());
-
     sqlite3 *db;
     char *zErrMsg = 0;
     int rc;
@@ -979,7 +947,7 @@ int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::stri
     rc = sqlite3_open(serialize_file.c_str(), &db);
 
     if (rc) {
-        LOG(LOG_ERR, "Can't open %s for de-serialization.\n", serialize_file.c_str());
+        LOG(LOG_ERR, "Can't open %s for de-serialization.", serialize_file.c_str());
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
@@ -987,7 +955,7 @@ int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::stri
                           "timestamp, last_event, file_size, cr_index from change_map", query_callback_change_map, &change_map, &zErrMsg);
 
     if (rc) {
-        LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s\n", zErrMsg);
+        LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s", zErrMsg);
         sqlite3_close(db);
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
@@ -996,7 +964,7 @@ int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::stri
     rc = sqlite3_exec(db, "delete from change_map", NULL, NULL, &zErrMsg);
     
     if (rc) {
-        LOG(LOG_ERR, "Error clearing out change_map from db during de-serialization: %s\n", zErrMsg);
+        LOG(LOG_ERR, "Error clearing out change_map from db during de-serialization: %s", zErrMsg);
         sqlite3_close(db);
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
@@ -1032,14 +1000,14 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
     rc = sqlite3_open(serialize_file.c_str(), &db);
 
     if (rc) {
-        LOG(LOG_ERR, "Can't create or open %s.\n", serialize_file.c_str());
+        LOG(LOG_ERR, "Can't create or open %s.", serialize_file.c_str());
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     rc = sqlite3_exec(db, create_table_str,  NULL, NULL, &zErrMsg);
     
     if (rc) {
-        LOG(LOG_ERR, "Error creating change_map table: %s\n", zErrMsg);
+        LOG(LOG_ERR, "Error creating change_map table: %s", zErrMsg);
         sqlite3_close(db);
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
@@ -1047,7 +1015,7 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
     rc = sqlite3_exec(db, create_last_cr_index_table,  NULL, NULL, &zErrMsg);
     
     if (rc) {
-        LOG(LOG_ERR, "Error creating last_cr_index table: %s\n", zErrMsg);
+        LOG(LOG_ERR, "Error creating last_cr_index table: %s", zErrMsg);
         sqlite3_close(db);
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }

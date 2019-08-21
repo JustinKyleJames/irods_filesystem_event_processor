@@ -41,6 +41,8 @@
 #include "avro/Encoder.hh"
 #include "avro/Decoder.hh"
 
+extern thread_local char *thread_identifier;
+
 static std::mutex inflight_messages_mutex;
 //unsigned int number_inflight_messages = 0;
 
@@ -156,7 +158,7 @@ std::string get_basename(const std::string& p1) {
 
 bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zmq::socket_t& event_aggregator_socket) {
 
-    LOG(LOG_DBG, "packet received: [type=%s][path=%s][entryId=%s][parentEntryId=%s][targetPath=%s][targetParentId=%s]\n", 
+    LOG(LOG_DBG, "packet received: [type=%s][path=%s][entryId=%s][parentEntryId=%s][targetPath=%s][targetParentId=%s]", 
             to_string(packet.type).c_str(), packet.path.c_str(), packet.entryId.c_str(), packet.parentEntryId.c_str(), 
             packet.targetPath.c_str(), packet.targetParentId.c_str());
 
@@ -211,7 +213,7 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zm
         return true;  // continue on error
     }
 
-    LOG(LOG_INFO, "reply:  %s\n", reply_str.c_str());
+    LOG(LOG_INFO, "reply:  %s", reply_str.c_str());
 
     return "CONTINUE" == reply_str;
 }
@@ -271,7 +273,7 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
         }
 
         if (vm.count("config-file")) {
-            LOG(LOG_DBG,"setting configuration file to %s\n", vm["config-file"].as<std::string>().c_str());
+            LOG(LOG_DBG,"setting configuration file to %s", vm["config-file"].as<std::string>().c_str());
             config_file = vm["config-file"].as<std::string>().c_str();
         }
 
@@ -280,9 +282,9 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
             dbgstream = fopen(log_file.c_str(), "a");
             if (nullptr == dbgstream) {
                 dbgstream = stdout;
-                LOG(LOG_ERR, "could not open log file %s... using stdout instead.\n", optarg);
+                LOG(LOG_ERR, "could not open log file %s... using stdout instead.", optarg);
             } else {
-                LOG(LOG_DBG, "setting log file to %s\n", vm["log-file"].as<std::string>().c_str());
+                LOG(LOG_DBG, "setting log file to %s", vm["log-file"].as<std::string>().c_str());
             }
         }
         return irods_filesystem_event_processor_error::SUCCESS;
@@ -346,22 +348,24 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
                     }
                     break;
                 case FileEventReceiver::ReadErrorCode::VersionMismatch:
-                    LOG(LOG_WARN, "Invalid packet version in BeeGFS event.  Ignoring event.\n");
+                    LOG(LOG_WARN, "Invalid packet version in BeeGFS event.  Ignoring event.");
                     break;
                 case FileEventReceiver::ReadErrorCode::InvalidSize:
-                    LOG(LOG_WARN, "Invalid packet size in BeeGFS event.  Ignoring event.\n");
+                    LOG(LOG_WARN, "Invalid packet size in BeeGFS event.  Ignoring event.");
                     break;
                 case FileEventReceiver::ReadErrorCode::ReadFailed:
-                    LOG(LOG_WARN, "Read BeeGFS event failed.\n");
+                    LOG(LOG_WARN, "Read BeeGFS event failed.");
                     break;
         }
         } catch (BeeGFS::FileEventReceiver::exception& e) {
-            LOG(LOG_ERR, "%s\n", e.what());
+            LOG(LOG_ERR, "%s", e.what());
         }
     }
 }
 
 int main(int argc, char *argv[]) {
+
+    thread_identifier = (char*)"main";
 
     std::string config_file = "beegfs_event_listener_config.json";
     std::string log_file;

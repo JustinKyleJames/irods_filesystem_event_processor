@@ -14,11 +14,13 @@
 FILE *dbgstream = stdout;
 int  log_level = LOG_INFO;
 
+thread_local char *thread_identifier;
+
 int read_key_from_map(const json_map& config_map, const std::string &key, std::string& value, bool required = true) {
     auto entry = config_map.find(key);
     if (entry == config_map.end()) {
        if (required) {
-           LOG(LOG_ERR, "Could not find key %s in configuration\n", key.c_str());
+           LOG(LOG_ERR, "Could not find key %s in configuration", key.c_str());
            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
        } else {
            // return error here just indicates the caller should
@@ -67,12 +69,12 @@ bool remove_trailing_slash(std::string& path) {
 int read_config_file(const std::string& filename, filesystem_event_aggregator_cfg_t *config_struct) {
 
     if ("" == filename) {
-        LOG(LOG_ERR, "read_config_file did not receive a filename\n");
+        LOG(LOG_ERR, "read_config_file did not receive a filename");
         return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
     }
 
     if (nullptr == config_struct) {
-        LOG(LOG_ERR, "Null config_struct sent to %s - %d\n", __FUNCTION__, __LINE__);
+        LOG(LOG_ERR, "Null config_struct sent to %s - %d", __FUNCTION__, __LINE__);
         return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
@@ -89,50 +91,50 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         json_map config_map{ json_file{ filename.c_str() } };
 
         if (0 != read_key_from_map(config_map, "irods_resource_name", config_struct->irods_resource_name)) {
-            LOG(LOG_ERR, "Key resource_name missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key resource_name missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "irods_api_update_type", config_struct->irods_api_update_type)) {
             std::transform(config_struct->irods_api_update_type.begin(), config_struct->irods_api_update_type.end(), 
                     config_struct->irods_api_update_type.begin(), ::tolower);
-            LOG(LOG_ERR, "Key irods_api_update_type missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key irods_api_update_type missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "irods_client_connect_failure_retry_seconds", irods_client_connect_failure_retry_seconds_str)) {
-            LOG(LOG_ERR, "Key irods_client_connect_failure_retry_seconds missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key irods_client_connect_failure_retry_seconds missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "irods_client_broadcast_address", config_struct->irods_client_broadcast_address)) {
-            LOG(LOG_ERR, "Key irods_client_broadcast_address missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key irods_client_broadcast_address missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "changelog_reader_broadcast_address", config_struct->changelog_reader_broadcast_address)) {
-            LOG(LOG_ERR, "Key changelog_reader_broadcast_address missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key changelog_reader_broadcast_address missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "event_aggregator_address", config_struct->event_aggregator_address)) {
-            LOG(LOG_ERR, "Key event_aggregator_address missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key event_aggregator_address missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
         if (0 != read_key_from_map(config_map, "irods_updater_thread_count", irods_updater_thread_count_str)) {
-            LOG(LOG_ERR, "Key irods_updater_thread_count missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key irods_updater_thread_count missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "maximum_queued_records", maximum_queued_records_str)) {
-            LOG(LOG_ERR, "Key maximum_queued_records missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key maximum_queued_records missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "maximum_records_per_sql_command", maximum_records_per_sql_command_str)) {
-            LOG(LOG_ERR, "Key maximum_records_per_sql_command missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key maximum_records_per_sql_command missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "maximum_records_per_update_to_irods", maximum_records_per_update_to_irods_str)) {
-            LOG(LOG_ERR, "Key maximum_records_per_upate_to_irods missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key maximum_records_per_upate_to_irods missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "message_receive_timeout_msec", message_receive_timeout_msec_str)) {
-            LOG(LOG_ERR, "Key message_receive_timeout_msec missing from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Key message_receive_timeout_msec missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -151,7 +153,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         if (0 != read_key_from_map(config_map, "metadata_key_for_storage_tiering_time_violation", config_struct->metadata_key_for_storage_tiering_time_violation, false)) {
             config_struct->metadata_key_for_storage_tiering_time_violation = "irods::access_time";
         } 
-        LOG(LOG_INFO, "set metadata_key_for_storage_tiering_time_violation=%s\n", config_struct->metadata_key_for_storage_tiering_time_violation.c_str());
+        LOG(LOG_INFO, "set metadata_key_for_storage_tiering_time_violation=%s", config_struct->metadata_key_for_storage_tiering_time_violation.c_str());
 
         // read register_map
         try {
@@ -163,11 +165,11 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
                 std::string physical_path, irods_register_path;
 
                 if (0 != read_key_from_map(path_map_entry, "physical_path", physical_path)) {
-                    LOG(LOG_ERR, "Key physical_path missing from entry in register_map of json file %s\n", filename.c_str());
+                    LOG(LOG_ERR, "Key physical_path missing from entry in register_map of json file %s", filename.c_str());
                     return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
                 }
                 if (0 != read_key_from_map(path_map_entry, "irods_register_path", irods_register_path)) {
-                    LOG(LOG_ERR, "Key irods_register_path missing from entry in register_map of json file %s\n", filename.c_str());
+                    LOG(LOG_ERR, "Key irods_register_path missing from entry in register_map of json file %s", filename.c_str());
                     return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
                 }
 
@@ -181,7 +183,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
             }
 
         } catch (const std::exception& e) {
-            LOG(LOG_ERR, "Could not read register_map array from %s\n", filename.c_str());
+            LOG(LOG_ERR, "Could not read register_map array from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -200,14 +202,14 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
 
         // error if the setting is not "direct" or "policy"
         if (config_struct->irods_api_update_type != "direct" && config_struct->irods_api_update_type != "policy") { 
-            LOG(LOG_ERR, "Could not parse irods_api_update_type.  It must be either \"direct\" or \"policy\".\n");
+            LOG(LOG_ERR, "Could not parse irods_api_update_type.  It must be either \"direct\" or \"policy\".");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
         try {
             config_struct->irods_client_connect_failure_retry_seconds = boost::lexical_cast<unsigned int>(irods_client_connect_failure_retry_seconds_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse irods_client_connect_failure_retry_seconds as an integer.\n");
+            LOG(LOG_ERR, "Could not parse irods_client_connect_failure_retry_seconds as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -215,28 +217,28 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         try {
             config_struct->irods_updater_thread_count = boost::lexical_cast<unsigned int>(irods_updater_thread_count_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse irods_updater_thread_count as an integer.\n");
+            LOG(LOG_ERR, "Could not parse irods_updater_thread_count as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
         try {
             config_struct->maximum_records_per_update_to_irods = boost::lexical_cast<unsigned int>(maximum_records_per_update_to_irods_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse maximum_records_per_update_to_irods as an integer.\n");
+            LOG(LOG_ERR, "Could not parse maximum_records_per_update_to_irods as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
         try {
             config_struct->maximum_records_per_sql_command = boost::lexical_cast<unsigned int>(maximum_records_per_sql_command_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse maximum_records_per_sql_command as an integer.\n");
+            LOG(LOG_ERR, "Could not parse maximum_records_per_sql_command as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
         try {
             config_struct->maximum_queued_records = boost::lexical_cast<unsigned int>(maximum_queued_records_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse maximum_queued_records as an integer.\n");
+            LOG(LOG_ERR, "Could not parse maximum_queued_records as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -244,7 +246,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         try {
             config_struct->message_receive_timeout_msec = boost::lexical_cast<unsigned int>(message_receive_timeout_msec_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse message_receive_timeout_msec as an integer.\n");
+            LOG(LOG_ERR, "Could not parse message_receive_timeout_msec as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -265,7 +267,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
                 std::string value = ss.str();
                 value.erase(remove(value.begin(), value.end(), '\"' ), value.end());
                 if ("null" == value) {
-                    LOG(LOG_ERR, "Could not read irods_host for connection %u.  Either define it or leave off connection 1 paramters to use defaults from the iRODS environment.\n", i);
+                    LOG(LOG_ERR, "Could not read irods_host for connection %u.  Either define it or leave off connection 1 paramters to use defaults from the iRODS environment.", i);
                     return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
                 }
 
@@ -281,7 +283,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
                 try {
                     config_entry.irods_port = boost::lexical_cast<unsigned int>(value);
                 } catch (boost::bad_lexical_cast& e) {
-                    LOG(LOG_ERR, "Could not parse port %s as an integer.\n", value.c_str());
+                    LOG(LOG_ERR, "Could not parse port %s as an integer.", value.c_str());
                     return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
                 }
                 config_struct->irods_connection_list[i] = config_entry;
@@ -290,7 +292,7 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         } 
 
     } catch (std::exception& e) {
-        LOG(LOG_ERR, "Could not read %s - %s\n", filename.c_str(), e.what());
+        LOG(LOG_ERR, "Could not read %s - %s", filename.c_str(), e.what());
         return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
     }
     return irods_filesystem_event_processor_error::SUCCESS;
