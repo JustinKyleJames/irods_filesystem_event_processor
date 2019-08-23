@@ -19,6 +19,8 @@ const int QUIT = -12;
 const int COLLISION_IN_FIDSTR = -13;
 const int CHANGELOG_START_ERROR = -14;
 const int SKIP_RECORD = -15;
+const int CHANGELOG_READ_ERROR = -16;
+const int LUSTRE_OBJECT_DNE_ERROR = -17;
 }
 
 #endif

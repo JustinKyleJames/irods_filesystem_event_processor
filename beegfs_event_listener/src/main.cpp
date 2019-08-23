@@ -1,6 +1,5 @@
 /*
- * Main routine handling the event loop for the Beegfs changelog reader and
- * the event loop for the iRODS API client.
+ * Main routine handling the event loop for the Beegfs changelog reader.
  */
 
 
@@ -43,9 +42,6 @@
 
 extern thread_local char *thread_identifier;
 
-static std::mutex inflight_messages_mutex;
-//unsigned int number_inflight_messages = 0;
-
 namespace po = boost::program_options;
 
 std::atomic<bool> keep_running(true);
@@ -82,51 +78,6 @@ std::string serialize_and_send_event(const fs_event::filesystem_event& event, zm
     }
 
     return std::string(static_cast<char*>(reply.data()), reply.size());
-}
-
-//  Sends string as 0MQ string, as multipart non-terminal 
-/*static bool s_sendmore (zmq::socket_t& socket, const std::string& string) {
-
-    zmq::message_t message(string.size());
-    memcpy (message.data(), string.data(), string.size());
-
-    bool bytes_sent;
-    try {
-        bytes_sent= socket.send (message, ZMQ_SNDMORE);
-    } catch (const zmq::error_t& e) {
-        bytes_sent = 0;
-    }
-
-    return (bytes_sent > 0);
-}
-
-//  Convert string to 0MQ string and send to socket
-static bool s_send(zmq::socket_t& socket, const std::string& string) {
-
-    zmq::message_t message(string.size());
-    memcpy (message.data(), string.data(), string.size());
-
-    size_t bytes_sent;
-    try {
-       bytes_sent = socket.send (message);
-    } catch (const zmq::error_t& e) {
-        bytes_sent = 0;
-    }
-
-    return (bytes_sent > 0);
-}*/
-
-//  Receive 0MQ string from socket and convert into string
-static std::string s_recv_noblock(zmq::socket_t& socket) {
-
-    zmq::message_t message;
-
-    try {
-        socket.recv(&message, ZMQ_NOBLOCK);
-    } catch (const zmq::error_t& e) {
-    }
-
-    return std::string(static_cast<char*>(message.data()), message.size());
 }
 
 class beegfs_event_read_exception : public std::exception
@@ -216,35 +167,6 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zm
     LOG(LOG_INFO, "reply:  %s", reply_str.c_str());
 
     return "CONTINUE" == reply_str;
-}
-
-//  Receive 0MQ string from socket and ignore the return 
-void s_recv_noblock_void(zmq::socket_t& socket) {
-
-    zmq::message_t message;
-    try {
-        socket.recv(&message, ZMQ_NOBLOCK);
-    } catch (const zmq::error_t& e) {
-    }
-}
-
-bool received_terminate_message(zmq::socket_t& subscriber) {
-
-    s_recv_noblock_void(subscriber);
-    std::string contents = s_recv_noblock(subscriber);
-
-    return contents == "terminate";
-
-}
-
-
-// Perform a no-block message receive.  If no message is available return std::string("").
-std::string receive_message(zmq::socket_t& subscriber) {
-
-    s_recv_noblock_void(subscriber);
-    std::string contents = s_recv_noblock(subscriber);
-
-    return contents;
 }
 
 int read_and_process_command_line_options(int argc, char *argv[], std::string& config_file) {

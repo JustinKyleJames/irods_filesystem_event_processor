@@ -63,6 +63,8 @@ include_directories(/usr/include/irods
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
 add_executable(beegfs_event_listener 
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json
     ${PROJECT_SOURCE_DIR}/src/config.cpp 
     ${PROJECT_SOURCE_DIR}/src/main.cpp 
     ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp)
