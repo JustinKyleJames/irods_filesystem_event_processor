@@ -200,7 +200,7 @@ void update_change_table_with_results(change_map_t* change_map, std::set<std::st
 void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struct_ptr,
         change_map_t* change_map, unsigned int thread_number, std::set<std::string>* active_objectIdentifier_list) {
 
-	std::string thread_identifier_str = str(boost::format("irods client (%u)") % thread_number);
+    std::string thread_identifier_str = str(boost::format("irods client (%u)") % thread_number);
     thread_identifier = const_cast<char*>(thread_identifier_str.c_str());
 
     if (nullptr == change_map || nullptr == config_struct_ptr) {
@@ -248,51 +248,51 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
                 break;
             }
 
-			if (!irods_error_detected && buffer->size() > 0) {
+            if (!irods_error_detected && buffer->size() > 0) {
 
-				irodsFsEventApiInp_t inp {};
-				inp.buf = static_cast<unsigned char*>(buffer->data());
-				inp.buflen = buffer->size(); 
+                irodsFsEventApiInp_t inp {};
+                inp.buf = static_cast<unsigned char*>(buffer->data());
+                inp.buflen = buffer->size(); 
 
-				if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number)) {
+                if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number)) {
 
-					// send to irods
+                    // send to irods
                     LOG(LOG_DBG, "send changemap to iRODS");
-					if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
+                    if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
                         LOG(LOG_DBG, "received error from iRODS");
-						irods_error_detected = true;
-					}
+                        irods_error_detected = true;
+                    }
                     LOG(LOG_DBG, "iRODS responded with success");
-				} else {
-					irods_error_detected = true;
-				}
+                } else {
+                    irods_error_detected = true;
+                }
 
-				if (irods_error_detected) {
+                if (irods_error_detected) {
 
-					// irods was previous up but now is down
+                    // irods was previous up but now is down
 
-					// send message to changelog reader to pause reading changelog
-					LOG(LOG_DBG, "sending pause message to changelog_reader");
-					s_sendmore(publisher, "changelog_reader");
-					std::string msg = str(boost::format("pause:%u") % thread_number);
-					s_send(publisher, msg.c_str());
+                    // send message to changelog reader to pause reading changelog
+                    LOG(LOG_DBG, "sending pause message to changelog_reader");
+                    s_sendmore(publisher, "changelog_reader");
+                    std::string msg = str(boost::format("pause:%u") % thread_number);
+                    s_send(publisher, msg.c_str());
 
-					// remove object id's from active list and add entries back to change table 
+                    // remove object id's from active list and add entries back to change table 
                     remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
 
                     LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table");
                     add_avro_buffer_back_to_change_table(buffer, *change_map, *active_objectIdentifier_list);
                     break;
-				} else {
+                } else {
                     remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
                 }
 
-			}  
+            }  
         }
         
         if (irods_error_detected) {
     
-		    LOG(LOG_DBG, "entering error state");
+        LOG(LOG_DBG, "entering error state");
             // in a failure state, remain here until we have detected that iRODS is back up
 
             // try a connection in a loop until irods is back up. 
@@ -319,7 +319,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
             } while (0 != conn.instantiate_irods_connection(config_struct_ptr, thread_number )); 
 
-		    LOG(LOG_DBG, "leaving error state");
+            LOG(LOG_DBG, "leaving error state");
             
             // irods is back up, set status and send a message to the changelog reader
             

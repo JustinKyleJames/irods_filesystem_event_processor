@@ -217,7 +217,7 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
     event.targetParentId = convert_to_fidstr(get_cr_pfid_from_changelog_rec(rec));
 
     event.basename = get_basename(lustre_full_path);
-    event.full_path = concatenate_paths_with_boost(lustre_root_path, lustre_full_path);
+    event.full_path = lustre_full_path;
 
 
     // TODO object name vs basename
@@ -277,9 +277,6 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
         return true; 
     }
 
-    // TODO remove -  for debug just return
-    return true;
-
     std::string reply_str;
     try {
         reply_str = serialize_and_send_event(event, event_aggregator_socket);
@@ -294,7 +291,7 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
 
 int start_changelog(const std::string& mdtname, cl_ctx_ptr *ctx, unsigned long long start_cr_index) {
     // TODO passing start_cr_index seems to not work
-    return changelog_wrapper_start(ctx, get_cl_block(), mdtname.c_str(), start_cr_index);
+    return changelog_wrapper_start(ctx, get_cl_block() | get_cl_jobid(), mdtname.c_str(), start_cr_index);
 }
 
 int finish_changelog(cl_ctx_ptr *ctx) {
@@ -382,10 +379,10 @@ int run_main_changelog_reader_loop(const lustre_event_listener_cfg_t& config_str
     changelog_rec_ptr rec;
 
     // changelog reader context
-    cl_ctx_ptr reader_ctx;
+    cl_ctx_ptr reader_ctx_ptr = nullptr;
 
     // start changelog
-    rc = start_changelog(config_struct.mdtname, &reader_ctx, last_cr_index);
+    rc = start_changelog(config_struct.mdtname, &reader_ctx_ptr, last_cr_index);
     if (rc < 0) {
         LOG(LOG_ERR, "changelog_start: %s  [rc=%d]\n", zmq_strerror(-rc), rc);
        
@@ -393,8 +390,8 @@ int run_main_changelog_reader_loop(const lustre_event_listener_cfg_t& config_str
 
     while (keep_running.load()) {
 
-        if (nullptr == reader_ctx) {
-            rc = start_changelog(config_struct.mdtname, &reader_ctx, last_cr_index);
+        if (nullptr == reader_ctx_ptr) {
+            rc = start_changelog(config_struct.mdtname, &reader_ctx_ptr, last_cr_index);
  
             if (rc < 0) {
                 LOG(LOG_ERR, "changelog_start: %s\n", zmq_strerror(-rc));
@@ -404,22 +401,42 @@ int run_main_changelog_reader_loop(const lustre_event_listener_cfg_t& config_str
 
         // read events
         
-        rc = changelog_wrapper_recv(reader_ctx, &rec);
+        rc = changelog_wrapper_recv(reader_ctx_ptr, &rec);
 
         if (1 == rc || -EAGAIN == rc || -EPROTO == rc) {
+          
+            finish_changelog(&reader_ctx_ptr);
+            reader_ctx_ptr = nullptr;
 
-             // reset the connection and try again
-             finish_changelog(&reader_ctx);
-             reader_ctx = nullptr;
-
-             rc = start_changelog(config_struct.mdtname, &reader_ctx, last_cr_index);
+            rc = start_changelog(config_struct.mdtname, &reader_ctx_ptr, last_cr_index);
  
-             if (rc < 0) {
-                 LOG(LOG_ERR, "changelog_start: %s\n", zmq_strerror(-rc));
-                 return irods_filesystem_event_processor_error::CHANGELOG_START_ERROR;
-             }   
+            if (rc < 0) {
+                LOG(LOG_ERR, "changelog_start: %s\n", zmq_strerror(-rc));
+                return irods_filesystem_event_processor_error::CHANGELOG_START_ERROR;
+            }  
+
+            // no changelog records, sleep for sleep_time_when_changelog_empty_seconds
+            // and continue
+            sleep(config_struct.sleep_time_when_changelog_empty_seconds);
+            continue;
+
         } else if (0 != rc) {
-            return irods_filesystem_event_processor_error::CHANGELOG_READ_ERROR;
+             LOG(LOG_ERR, "llapi_changelog_recv returned error : %s\n", rc);
+
+            // sleep and then reset the connection and continue main loop
+            sleep(config_struct.sleep_time_when_changelog_empty_seconds);
+
+            finish_changelog(&reader_ctx_ptr);
+            reader_ctx_ptr = nullptr;
+
+            rc = start_changelog(config_struct.mdtname, &reader_ctx_ptr, last_cr_index);
+ 
+            if (rc < 0) {
+                LOG(LOG_ERR, "changelog_start: %s\n", zmq_strerror(-rc));
+                return irods_filesystem_event_processor_error::CHANGELOG_START_ERROR;
+            }  
+          
+            continue; 
         }
 
         time_t      secs;

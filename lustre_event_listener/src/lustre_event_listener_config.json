@@ -1,8 +1,9 @@
 {
-    "mdtname": "lustre01-MDT0000",
-    "changelog_reader": "cl1",
-    "lustre_root_path": "/lustreResc/lustre01",
+    "mdtname": "test-MDT0000",
+    "changelog_reader": "cl3",
+    "lustre_root_path": "/mnt/lustre",
     "log_level": "LOG_DBG",
-    "event_aggregator_address": "ipc:///changelog_reader_push_work_events"
+    "event_aggregator_address": "ipc:///changelog_reader_push_work_events",
+    "sleep_time_when_changelog_empty_seconds": 1
 }
 

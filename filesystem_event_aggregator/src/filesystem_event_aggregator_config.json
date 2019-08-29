@@ -17,15 +17,15 @@
 
         "register_map": [
             {
-                "physical_path": "/mnt/beegfs/home",
+                "physical_path": "/mnt/lustre/home",
                 "irods_register_path": "/tempZone/home"
             },
             {
-                "physical_path": "/mnt/beegfs/rods",
+                "physical_path": "/mnt/lustre/rods",
                 "irods_register_path": "/tempZone/home/rods"
             },
             {
-                "physical_path": "/mnt/beegfs",
+                "physical_path": "/mnt/lustre",
                 "irods_register_path": "/tempZone/home/public"
             }
         ],

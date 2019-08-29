@@ -11,6 +11,7 @@ typedef struct lustre_event_listener_cfg {
     std::string changelog_reader;
     std::string lustre_root_path;
     std::string event_aggregator_address;
+    unsigned int sleep_time_when_changelog_empty_seconds;
 } lustre_event_listener_cfg_t;
 
 

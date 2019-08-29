@@ -78,6 +78,8 @@ int read_config_file(const std::string& filename, lustre_event_listener_cfg_t *c
         return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
     }
 
+    std::string sleep_time_when_changelog_empty_seconds_str;
+
     try {
         json_map config_map{ json_file{ filename.c_str() } };
 
@@ -102,8 +104,18 @@ int read_config_file(const std::string& filename, lustre_event_listener_cfg_t *c
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
-        // populate config variables
-        
+        if (0 != read_key_from_map(config_map, "sleep_time_when_changelog_empty_seconds", sleep_time_when_changelog_empty_seconds_str)) {
+            LOG(LOG_ERR, "Key sleep_time_when_changelog_empty_seconds missing from %s", filename.c_str());
+            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
+        }
+
+        try {
+            config_struct->sleep_time_when_changelog_empty_seconds = boost::lexical_cast<unsigned int>(sleep_time_when_changelog_empty_seconds_str);
+        } catch (boost::bad_lexical_cast& e) {
+            LOG(LOG_ERR, "Could not parse sleep_time_when_changelog_empty_seconds as an integer.\n");
+            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
+        }   
+
         std::string log_level_str;
 
         if (0 == read_key_from_map(config_map, "log_level", log_level_str)) {

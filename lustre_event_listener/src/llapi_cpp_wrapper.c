@@ -45,6 +45,11 @@ int get_cl_block() {
     return CHANGELOG_FLAG_BLOCK;
 }
 
+int get_cl_jobid() {
+
+    return CHANGELOG_FLAG_JOBID;
+}
+
 int llapi_fid2path_wrapper(const char *device, const char *fidstr, char *path,
                       int pathlen, long long *recno, int *linkno) { 
 

@@ -578,8 +578,8 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
 
             // **** debug **** 
-            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][physical_path=%s]", change_entry.objectIdentifier.c_str(), 
-                    change_entry.parentObjectIdentifier.c_str(), change_entry.objectName.c_str(), change_entry.filePath.c_str());
+            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][physical_path=%s][file_size=%d]", change_entry.objectIdentifier.c_str(), 
+                    change_entry.parentObjectIdentifier.c_str(), change_entry.objectName.c_str(), change_entry.filePath.c_str(), change_entry.fileSize);
             // *************
             
             map.entries.push_back(change_entry);
