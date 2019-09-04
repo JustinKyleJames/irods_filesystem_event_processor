@@ -15,11 +15,12 @@ typedef struct filesystem_event_aggregator_cfg {
     std::string irods_resource_name;
     std::string irods_api_update_type;    // valid values are "direct" and "policy"
     int64_t irods_resource_id;
-    unsigned int irods_client_connect_failure_retry_seconds;
-    std::string irods_client_broadcast_address;
+    unsigned int irods_updater_sleep_time_seconds;
+    unsigned int irods_updater_thread_count;
+    unsigned int irods_updater_connect_failure_retry_seconds;
+    std::string irods_updater_broadcast_address;
     std::string changelog_reader_broadcast_address;
     std::string event_aggregator_address;   // must be the same as the event listener's event_aggregator_address
-    unsigned int irods_updater_thread_count;
     unsigned int maximum_records_per_sql_command;
     unsigned int maximum_records_per_update_to_irods;
     unsigned int maximum_queued_records;

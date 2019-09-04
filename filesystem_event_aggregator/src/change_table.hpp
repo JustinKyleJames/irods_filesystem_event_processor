@@ -7,6 +7,7 @@
 #include <string>
 #include <ctime>
 #include <vector>
+#include <set>
 
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
@@ -97,10 +98,10 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
 int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::string& db_file);
 int initiate_change_map_serialization_database(const std::string& db_file);
 int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, boost::shared_ptr< std::vector<uint8_t>>& buffer,
-                                          change_map_t& change_map, std::set<std::string>& current_active_objectId_list); 
+                                          change_map_t& change_map, std::multiset<std::string>& current_active_objectId_list); 
 void add_entries_back_to_change_table(change_map_t& change_map, std::shared_ptr<change_map_t>& removed_entries);
-int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, std::set<std::string>& current_active_objectId_list);
-void remove_objectId_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::set<std::string>& current_active_objectId_list);
+int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, std::multiset<std::string>& current_active_objectId_list);
+void remove_objectIds_in_avro_buffer_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::multiset<std::string>& current_active_objectId_list);
 int get_cr_index(unsigned long long& cr_index, const std::string& db_file);
 int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_file);
 

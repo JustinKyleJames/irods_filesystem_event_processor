@@ -147,7 +147,6 @@ int handle_mkdir(unsigned long long cr_index, const std::string& fs_mount_path, 
 int handle_rmdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
                  const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
 
-
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
     // get change map with hashed index of objectId
@@ -205,8 +204,8 @@ int handle_unlink(unsigned long long cr_index, const std::string& fs_mount_path,
         change_descriptor entry{};
         entry.cr_index = cr_index;
         entry.objectId = objectId;
-        //entry.parent_objectId = parent_objectId;
-        //entry.physical_path = physical_path;
+        entry.parent_objectId = parent_objectId;
+        entry.physical_path = physical_path;
         entry.oper_complete = true;
         entry.last_event = file_system_event_aggregator::EventTypeEnum::UNLINK;
         entry.timestamp = time(NULL);
@@ -484,13 +483,11 @@ int get_update_status_from_avro_buf(const unsigned char* buf, const size_t bufle
 
 
 // Processes change table by writing records ready to be sent to iRODS into avro buffer (buffer).
-//int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, boost::shared_ptr< std::vector< uint8_t > >& data,
-//        change_map_t& change_map, std::set<std::string>& active_objectId_list) {
 int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, boost::shared_ptr< std::vector<uint8_t>>& buffer, 
-        change_map_t& change_map, std::set<std::string>& active_objectId_list) {
+        change_map_t& change_map, std::multiset<std::string>& active_objectId_list) {
 
     // store up a list of objectId that are being added to this buffer
-    std::set<std::string> temp_objectId_list;
+    std::multiset<std::string> temp_objectId_list;
 
     if (nullptr == config_struct_ptr) {
         LOG(LOG_ERR, "Null config_struct_ptr sent to %s - %d", __FUNCTION__, __LINE__);
@@ -540,9 +537,9 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
         if (iter->oper_complete) {
 
-            // break out of the main loop if we reach an objectId that is already being operated on
-            // by another thread.  In the case of MKDIR, CREATE, and RENAME, break out if the parent_objectId is already being
-            // operated on by another thread.
+            // break out of the main loop if we reach a point where a previous event needs to be acted upon first. 
+            // For MKDIR, CREATE, and RENAME - break out if there is an active event on the parent.
+            // For RMDIR, UNLINK - break out of there is an active event on itself
 
             if (iter->last_event == file_system_event_aggregator::EventTypeEnum::MKDIR ||
                     iter->last_event == file_system_event_aggregator::EventTypeEnum::CREATE ||
@@ -553,17 +550,32 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
                     collision_in_objectId = true;
                     break;
                 }
+
+            } else if (iter->last_event == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                    iter->last_event == file_system_event_aggregator::EventTypeEnum::UNLINK) {
+
+                if (active_objectId_list.find(iter->objectId) != active_objectId_list.end()) {
+                    LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out", iter->objectId.c_str());
+                    collision_in_objectId = true;
+                    break;
+                }
             }
 
-            if (active_objectId_list.find(iter->objectId) != active_objectId_list.end()) {
-                LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out", iter->objectId.c_str());
-                collision_in_objectId = true;
-                break;
-            }
+          
+            // if MKDIR, CREATE, or RENAME put self on active list, for RMDIR and UNLINK put parent on active list
+            if (iter->last_event == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                    iter->last_event == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                    iter->last_event == file_system_event_aggregator::EventTypeEnum::RENAME) {
 
-           
-            LOG(LOG_DBG, "adding objectId %s to active objectId list", iter->objectId.c_str());
-            temp_objectId_list.insert(iter->objectId);
+                LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Adding SELF %s to active objectId list", iter->objectId.c_str());
+                temp_objectId_list.insert(iter->objectId);
+
+            } else if (iter->last_event == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                    iter->last_event == file_system_event_aggregator::EventTypeEnum::UNLINK) {
+                
+                LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Adding PARENT %s to active objectId list", iter->parent_objectId.c_str());
+                temp_objectId_list.insert(iter->parent_objectId);
+            }
 
             // populate the change_entry and push it onto the map
             file_system_event_aggregator::ChangeDescriptor change_entry;            
@@ -604,7 +616,7 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
     LOG(LOG_DBG, "message_size=%lu", buffer->size());
 
-    // add all fid strings from tmp_objectId to active_objectId_list
+    // add all fid strings from temp_objectId to active_objectId_list
     active_objectId_list.insert(temp_objectId_list.begin(), temp_objectId_list.end());
 
     if (collision_in_objectId) {
@@ -615,10 +627,8 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 }
 
 // If we get a failure, the accumulator needs to add the entry back to the list.
-//int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector< uint8_t > >& data, change_map_t& change_map, std::set<std::string>& active_objectId_list) {
-
 int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, 
-        std::set<std::string>& active_objectId_list) {
+        std::multiset<std::string>& active_objectId_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -647,14 +657,34 @@ int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<ui
 
         change_map.insert(record);
 
-        // remove objectId from active objectId list
-        active_objectId_list.erase(record.objectId);
+        // update active object id list
+        if (iter->eventType == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                iter->eventType == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                iter->eventType == file_system_event_aggregator::EventTypeEnum::RENAME) {
+
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of SELF %s from active_objectId_list", iter->objectIdentifier.c_str());
+            auto itr = active_objectId_list.find(iter->objectIdentifier);
+            if(itr != active_objectId_list.end()){
+                active_objectId_list.erase(itr);
+            }
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+
+        } else if (iter->eventType == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                iter->eventType == file_system_event_aggregator::EventTypeEnum::UNLINK ) {
+
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of PARENT %s from active_objectId_list", iter->parentObjectIdentifier.c_str());
+            auto itr = active_objectId_list.find(iter->parentObjectIdentifier);
+            if(itr != active_objectId_list.end()){
+                active_objectId_list.erase(itr);
+            }
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+        }
     }
 
     return irods_filesystem_event_processor_error::SUCCESS;
 }   
 
-void remove_objectId_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::set<std::string>& active_objectId_list) {
+void remove_objectIds_in_avro_buffer_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::multiset<std::string>& active_objectId_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -665,11 +695,30 @@ void remove_objectId_from_active_list(const boost::shared_ptr< std::vector<uint8
     avro::decode(*dec, map);
 
     for (auto entry : map.entries) {
-        std::string objectId = entry.objectIdentifier;
-        std::string physical_path = entry.filePath;
-        active_objectId_list.erase(objectId);
-    }
 
+        if (entry.eventType == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                entry.eventType == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                entry.eventType == file_system_event_aggregator::EventTypeEnum::RENAME) {
+
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of SELF %s from active_objectId_list", entry.objectIdentifier.c_str());
+            auto itr = active_objectId_list.find(entry.objectIdentifier);
+            if(itr != active_objectId_list.end()){
+                active_objectId_list.erase(itr);
+            }
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+
+        } else if (entry.eventType == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                entry.eventType == file_system_event_aggregator::EventTypeEnum::UNLINK ) {
+
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of PARENT %s from active_objectId_list", entry.parentObjectIdentifier.c_str());
+            auto itr = active_objectId_list.find(entry.parentObjectIdentifier);
+            if(itr != active_objectId_list.end()){
+                active_objectId_list.erase(itr);
+            }
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+
+        }
+    }
 }
 
 
@@ -744,7 +793,7 @@ bool entries_ready_to_process(change_map_t& change_map) {
     // get change map indexed on oper_complete 
     auto &change_map_oper_complete = change_map.get<change_descriptor_oper_complete_idx>();
     bool ready = change_map_oper_complete.count(true) > 0;
-    LOG(LOG_DBG, "change map size: = %lu", change_map.size());
+    LOG(LOG_DBG, "change map size = %lu", change_map.size());
     LOG(LOG_DBG, "entries_ready_to_process = %i", ready);
     return ready; 
 }

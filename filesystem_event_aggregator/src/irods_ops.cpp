@@ -24,8 +24,6 @@
 #include <stdio.h>
 #include <boost/filesystem.hpp>
 
-extern thread_local char *thread_identifier;
-
 irods_connection::~irods_connection() {
     if (irods_conn) {
         LOG(LOG_DBG, "disconnecting irods");

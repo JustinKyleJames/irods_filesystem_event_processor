@@ -19,6 +19,7 @@
 #include <iostream>
 #include <sysexits.h>
 #include <utility>
+#include <set>
 
 // local headers 
 #include "irods_ops.hpp"
@@ -33,6 +34,7 @@
 // irods libraries
 #include "rodsDef.h"
 #include "inout_structs.h"
+#include "connection_pool.hpp"
 
 // boost headers 
 #include <boost/program_options.hpp>
@@ -177,7 +179,7 @@ int read_and_process_command_line_options(int argc, char *argv[], std::string& c
 }
 
 // called by iRODS updater threads to update the the change table in memory
-void update_change_table_with_results(change_map_t* change_map, std::set<std::string>* active_objectIdentifier_list, 
+void update_change_table_with_results(change_map_t* change_map, std::multiset<std::string>* active_objectIdentifier_list, 
         boost::shared_ptr< std::vector<uint8_t>> message_buffer, bool status_is_pass) {
 
     if (nullptr == change_map) {
@@ -186,11 +188,9 @@ void update_change_table_with_results(change_map_t* change_map, std::set<std::st
     }
 
     if (!status_is_pass) {
-        // TODO remove objectId?
-        remove_objectId_from_active_list(message_buffer, *active_objectIdentifier_list);
-        add_avro_buffer_back_to_change_table(message_buffer, *change_map, *active_objectIdentifier_list);
+        add_avro_buffer_back_to_change_table(message_buffer, *change_map, *active_objectIdentifier_list);  // also removes from list
     } else {
-        remove_objectId_from_active_list(message_buffer, *active_objectIdentifier_list);
+        remove_objectIds_in_avro_buffer_from_active_list(message_buffer, *active_objectIdentifier_list);
     } 
 
 }
@@ -198,7 +198,7 @@ void update_change_table_with_results(change_map_t* change_map, std::set<std::st
 // irods api client thread main routine
 // this is the main loop that reads the change entries in memory and sends them to iRODS via the API.
 void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struct_ptr,
-        change_map_t* change_map, unsigned int thread_number, std::set<std::string>* active_objectIdentifier_list) {
+        change_map_t* change_map, unsigned int thread_number, std::multiset<std::string>* active_objectIdentifier_list) {
 
     std::string thread_identifier_str = str(boost::format("irods client (%u)") % thread_number);
     thread_identifier = const_cast<char*>(thread_identifier_str.c_str());
@@ -211,8 +211,8 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
     // set up broadcast subscriber for terminate messages
     zmq::context_t context(1);  // 1 I/O thread
     zmq::socket_t subscriber(context, ZMQ_SUB);
-    LOG(LOG_DBG, "subscriber conn_str = %s",  config_struct_ptr->irods_client_broadcast_address.c_str());
-    subscriber.connect(config_struct_ptr->irods_client_broadcast_address.c_str());
+    LOG(LOG_DBG, "subscriber conn_str = %s",  config_struct_ptr->irods_updater_broadcast_address.c_str());
+    subscriber.connect(config_struct_ptr->irods_updater_broadcast_address.c_str());
     std::string identity("changetable_readers");
     subscriber.setsockopt(ZMQ_SUBSCRIBE, identity.c_str(), identity.length());
 
@@ -224,126 +224,133 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
 
     bool quit = false;
     bool irods_error_detected = false;
+    bool collision_detected = false;
 
     while (!quit) {
+  
+        {  // to control irods_connection lifetime
 
-        // initiate a connection object
-        irods_connection conn(thread_number);
-
-
-        while (entries_ready_to_process(*change_map)) {
-
-            LOG(LOG_DBG, "getting entries from changemap");
-
-            // get records ready to be processed into serialized buffer 
-            boost::shared_ptr< std::vector<uint8_t>> buffer;
-            int rc = write_change_table_to_avro_buf(config_struct_ptr, buffer,
-                    *change_map, *active_objectIdentifier_list);
-
-
-            // if we had a collision (meaning a dependency was encountered) avoid a busy-wait by breaking out of the
-            // loop where we can sleep
-            if (rc == irods_filesystem_event_processor_error::COLLISION_IN_FIDSTR) {
-                LOG(LOG_INFO, "----- Collision!  Breaking out -----");
-                break;
-            }
-
-            if (!irods_error_detected && buffer->size() > 0) {
-
-                irodsFsEventApiInp_t inp {};
-                inp.buf = static_cast<unsigned char*>(buffer->data());
-                inp.buflen = buffer->size(); 
-
-                if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number)) {
-
-                    // send to irods
-                    LOG(LOG_DBG, "send changemap to iRODS");
-                    if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
-                        LOG(LOG_DBG, "received error from iRODS");
+            // initiate a connection object
+            irods_connection conn(thread_number);
+    
+            // Loop through while we have entries to process.  If a collision is detected
+            // break out of the loop which forces a sleep before trying again.
+            while (!collision_detected && entries_ready_to_process(*change_map)) {
+    
+                LOG(LOG_DBG, "getting entries from changemap");
+    
+                // get records ready to be processed into serialized buffer 
+                boost::shared_ptr< std::vector<uint8_t>> buffer;
+                int rc = write_change_table_to_avro_buf(config_struct_ptr, buffer,
+                        *change_map, *active_objectIdentifier_list);
+    
+    
+                // if we had a collision (meaning a dependency was encountered) avoid a busy-wait by breaking out of the
+                // loop where we can sleep
+                if (rc == irods_filesystem_event_processor_error::COLLISION_IN_FIDSTR) {
+                    LOG(LOG_INFO, "----- Collision!  Breaking out -----");
+                    collision_detected = true;
+                }
+    
+                if (!irods_error_detected && buffer->size() > 0) {
+    
+                    irodsFsEventApiInp_t inp {};
+                    inp.buf = static_cast<unsigned char*>(buffer->data());
+                    inp.buflen = buffer->size(); 
+    
+                    if (0 == conn.instantiate_irods_connection(config_struct_ptr, thread_number)) {
+    
+                        // send to irods
+                        LOG(LOG_DBG, "send changemap to iRODS");
+                        if (irods_filesystem_event_processor_error::IRODS_ERROR == conn.send_change_map_to_irods(&inp)) {
+                            LOG(LOG_DBG, "received error from iRODS");
+                            irods_error_detected = true;
+                        }
+                        LOG(LOG_DBG, "iRODS responded with success");
+                    } else {
                         irods_error_detected = true;
                     }
-                    LOG(LOG_DBG, "iRODS responded with success");
-                } else {
-                    irods_error_detected = true;
-                }
-
-                if (irods_error_detected) {
-
-                    // irods was previous up but now is down
-
-                    // send message to changelog reader to pause reading changelog
-                    LOG(LOG_DBG, "sending pause message to changelog_reader");
-                    s_sendmore(publisher, "changelog_reader");
-                    std::string msg = str(boost::format("pause:%u") % thread_number);
-                    s_send(publisher, msg.c_str());
-
-                    // remove object id's from active list and add entries back to change table 
-                    remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
-
-                    LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table");
-                    add_avro_buffer_back_to_change_table(buffer, *change_map, *active_objectIdentifier_list);
-                    break;
-                } else {
-                    remove_objectId_from_active_list(buffer, *active_objectIdentifier_list);
-                }
-
-            }  
-        }
-        
-        if (irods_error_detected) {
     
-        LOG(LOG_DBG, "entering error state");
-            // in a failure state, remain here until we have detected that iRODS is back up
-
-            // try a connection in a loop until irods is back up. 
-            do {
-
-                // initiate a connection object
-                irods_connection conn(thread_number);
-
-
-                // sleep for sleep_period in a 1s loop so we can catch a terminate message
-                for (unsigned int i = 0; i < config_struct_ptr->irods_client_connect_failure_retry_seconds; ++i) {
-                    sleep(1);
-
-                    // see if there is a quit message, if so terminate
-                    if (received_terminate_message(subscriber)) {
-                        LOG(LOG_DBG, "received a terminate message");
-                        LOG(LOG_DBG, "exiting");
-                        return;
+                    if (irods_error_detected) {
+    
+                        // irods was previous up but now is down
+    
+                        // send message to changelog reader to pause reading changelog
+                        LOG(LOG_DBG, "sending pause message to changelog_reader");
+                        s_sendmore(publisher, "changelog_reader");
+                        std::string msg = str(boost::format("pause:%u") % thread_number);
+                        s_send(publisher, msg.c_str());
+    
+                        // remove object id's from active list and add entries back to change table 
+                        remove_objectIds_in_avro_buffer_from_active_list(buffer, *active_objectIdentifier_list);
+    
+                        LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table");
+                        add_avro_buffer_back_to_change_table(buffer, *change_map, *active_objectIdentifier_list);
+                        break;
+                    } else {
+                        remove_objectIds_in_avro_buffer_from_active_list(buffer, *active_objectIdentifier_list);
                     }
-                }
-
-                // double sleep period
-                //sleep_period = sleep_period << 1;
-
-            } while (0 != conn.instantiate_irods_connection(config_struct_ptr, thread_number )); 
-
-            LOG(LOG_DBG, "leaving error state");
+    
+                }  
+            }
+    
+            // reset collision_detected for next loop
+            collision_detected = false;
             
-            // irods is back up, set status and send a message to the changelog reader
-            
-            irods_error_detected = false;
-            LOG(LOG_DBG, "sending continue message to changelog reader");
-            std::string msg = str(boost::format("continue:%u") % thread_number);
-            s_sendmore(publisher, "changelog_reader");
-            s_send(publisher, msg.c_str());
+            if (irods_error_detected) {
+        
+                LOG(LOG_DBG, "entering error state");
+                // in a failure state, remain here until we have detected that iRODS is back up
+    
+                // try a connection in a loop until irods is back up. 
+                do {
+    
+                    // initiate a connection object
+                    irods_connection conn(thread_number);
+    
+    
+                    // sleep for sleep_period in a 1s loop so we can catch a terminate message
+                    for (unsigned int i = 0; i < config_struct_ptr->irods_updater_connect_failure_retry_seconds; ++i) {
+                        sleep(1);
+    
+                        // see if there is a quit message, if so terminate
+                        if (received_terminate_message(subscriber)) {
+                            LOG(LOG_DBG, "received a terminate message");
+                            LOG(LOG_DBG, "exiting");
+                            return;
+                        }
+                    }
+    
+                    // double sleep period
+                    //sleep_period = sleep_period << 1;
+    
+                } while (0 != conn.instantiate_irods_connection(config_struct_ptr, thread_number )); 
+    
+                LOG(LOG_DBG, "leaving error state");
+                
+                // irods is back up, set status and send a message to the changelog reader
+                
+                irods_error_detected = false;
+                LOG(LOG_DBG, "sending continue message to changelog reader");
+                std::string msg = str(boost::format("continue:%u") % thread_number);
+                s_sendmore(publisher, "changelog_reader");
+                s_send(publisher, msg.c_str());
+    
+            }
 
-            // sleep for sleep_period in a 1s loop so we can catch a terminate message
-            for (unsigned int i = 0; i < config_struct_ptr->irods_client_connect_failure_retry_seconds; ++i) {
-                sleep(1);
+        }  // end irods_connection lifetimes 
+
+        // sleep for sleep_period in a 1s loop so we can catch a terminate message
+        for (unsigned int i = 0; i < config_struct_ptr->irods_updater_sleep_time_seconds; ++i) {
+            sleep(1);
+
+            // see if there is a quit message, if so terminate
+            if (received_terminate_message(subscriber)) {
+                quit = true;
+                LOG(LOG_DBG, "received a terminate message");
+                break;
             }
         }
-
-
-        // see if there is a quit message, if so terminate
-        if (received_terminate_message(subscriber)) {
-             LOG(LOG_DBG, "received a terminate message");
-             quit = true;
-             break;
-        }
-
-        sleep(5);
 
     }
 
@@ -373,7 +380,7 @@ int main(int argc, char *argv[]) {
     if (irods_filesystem_event_processor_error::QUIT == rc) {
         return EX_OK;
     } else if (irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR == rc) {
-        return  EX_USAGE;
+        return EX_USAGE;
     }
 
     filesystem_event_aggregator_cfg_t config_struct;
@@ -418,16 +425,16 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // create a std::set of objectIdentifier which is used to pause sending updates to irods client updater threads
+    // create a std::multiset of objectIdentifier which is used to pause sending updates to irods client updater threads
     // when a dependency is detected 
-    std::set<std::string> active_objectIdentifier_list;
+    std::multiset<std::string> active_objectIdentifier_list;
 
 
     // start a pub/sub publisher which is used to terminate threads and to send irods up/down messages
     zmq::context_t context(1);
     zmq::socket_t publisher(context, ZMQ_PUB);
-    LOG(LOG_DBG, "main publisher conn_str = %s", config_struct.irods_client_broadcast_address.c_str());
-    publisher.bind(config_struct.irods_client_broadcast_address);
+    LOG(LOG_DBG, "main publisher conn_str = %s", config_struct.irods_updater_broadcast_address.c_str());
+    publisher.bind(config_struct.irods_updater_broadcast_address);
 
     // create a vector of irods client updater threads 
     std::vector<std::thread> irods_api_client_thread_list;
@@ -524,7 +531,7 @@ int main(int argc, char *argv[]) {
         fatal_error_detected = true;
     }
 
-    LOG(LOG_DBG,"%s: changelog client exiting");
+    LOG(LOG_DBG,"changelog client exiting");
     if (stdout != dbgstream) {
         fclose(dbgstream);
     }

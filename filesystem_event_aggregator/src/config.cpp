@@ -79,7 +79,8 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
     }
 
     std::string log_level_str;
-    std::string irods_client_connect_failure_retry_seconds_str;
+    std::string irods_updater_connect_failure_retry_seconds_str;
+    std::string irods_updater_sleep_time_seconds_str;
     std::string irods_updater_thread_count_str;
     std::string maximum_records_per_update_to_irods_str;
     std::string maximum_records_per_sql_command_str;
@@ -100,12 +101,12 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
             LOG(LOG_ERR, "Key irods_api_update_type missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
-        if (0 != read_key_from_map(config_map, "irods_client_connect_failure_retry_seconds", irods_client_connect_failure_retry_seconds_str)) {
-            LOG(LOG_ERR, "Key irods_client_connect_failure_retry_seconds missing from %s", filename.c_str());
+        if (0 != read_key_from_map(config_map, "irods_updater_connect_failure_retry_seconds", irods_updater_connect_failure_retry_seconds_str)) {
+            LOG(LOG_ERR, "Key irods_updater_connect_failure_retry_seconds missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
-        if (0 != read_key_from_map(config_map, "irods_client_broadcast_address", config_struct->irods_client_broadcast_address)) {
-            LOG(LOG_ERR, "Key irods_client_broadcast_address missing from %s", filename.c_str());
+        if (0 != read_key_from_map(config_map, "irods_updater_broadcast_address", config_struct->irods_updater_broadcast_address)) {
+            LOG(LOG_ERR, "Key irods_updater_broadcast_address missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "changelog_reader_broadcast_address", config_struct->changelog_reader_broadcast_address)) {
@@ -119,6 +120,10 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
 
         if (0 != read_key_from_map(config_map, "irods_updater_thread_count", irods_updater_thread_count_str)) {
             LOG(LOG_ERR, "Key irods_updater_thread_count missing from %s", filename.c_str());
+            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
+        }
+        if (0 != read_key_from_map(config_map, "irods_updater_sleep_time_seconds", irods_updater_sleep_time_seconds_str)) {
+            LOG(LOG_ERR, "Key irods_updater_sleep_time_seconds missing from %s", filename.c_str());
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
         if (0 != read_key_from_map(config_map, "maximum_queued_records", maximum_queued_records_str)) {
@@ -207,9 +212,9 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         }
 
         try {
-            config_struct->irods_client_connect_failure_retry_seconds = boost::lexical_cast<unsigned int>(irods_client_connect_failure_retry_seconds_str);
+            config_struct->irods_updater_connect_failure_retry_seconds = boost::lexical_cast<unsigned int>(irods_updater_connect_failure_retry_seconds_str);
         } catch (boost::bad_lexical_cast& e) {
-            LOG(LOG_ERR, "Could not parse irods_client_connect_failure_retry_seconds as an integer.");
+            LOG(LOG_ERR, "Could not parse irods_updater_connect_failure_retry_seconds as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
@@ -218,6 +223,13 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
             config_struct->irods_updater_thread_count = boost::lexical_cast<unsigned int>(irods_updater_thread_count_str);
         } catch (boost::bad_lexical_cast& e) {
             LOG(LOG_ERR, "Could not parse irods_updater_thread_count as an integer.");
+            return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
+        }
+
+        try {
+            config_struct->irods_updater_sleep_time_seconds = boost::lexical_cast<unsigned int>(irods_updater_sleep_time_seconds_str);
+        } catch (boost::bad_lexical_cast& e) {
+            LOG(LOG_ERR, "Could not parse irods_updater_sleep_time_seconds as an integer.");
             return irods_filesystem_event_processor_error::CONFIGURATION_ERROR;
         }
 
