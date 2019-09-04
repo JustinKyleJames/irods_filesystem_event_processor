@@ -33,44 +33,6 @@ irods_connection::~irods_connection() {
     irods_conn = nullptr;    
 }
 
-int irods_connection::send_change_map_to_irods(irodsFsEventApiInp_t *inp) const {
-
-
-    LOG(LOG_DBG,"calling send_change_map_to_irods");
-
-    if (nullptr == inp) {
-        LOG(LOG_ERR, "Null inp sent to %s - %d", __FUNCTION__, __LINE__);
-        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
-    }    
-
-
-    if (!irods_conn) {
-        LOG(LOG_ERR,"Error:  Called send_change_map_to_irods() without an active irods_conn");
-        return irods_filesystem_event_processor_error::IRODS_CONNECTION_ERROR;
-    }
-
-    irods::pack_entry_table& pk_tbl = irods::get_pack_table();
-    irods::api_entry_table& api_tbl = irods::get_client_api_table();
-    init_api_table( api_tbl, pk_tbl );
-
-    void *tmp_out = nullptr;
-    int status = procApiRequest( irods_conn, 15001, inp, NULL,
-                             &tmp_out, NULL );
-
-    int returnVal;
-
-    if ( status < 0 ) {
-        LOG(LOG_ERR, "ERROR - failed to call our api - %i", status);
-        returnVal = irods_filesystem_event_processor_error::IRODS_ERROR;
-    } else {
-        irodsFsEventApiOut_t* out = static_cast<irodsFsEventApiOut_t*>( tmp_out );
-        returnVal = out->status;
-    }
-
-    free(tmp_out);
-    return returnVal;
-}
-
 int irods_connection::populate_irods_resc_id(filesystem_event_aggregator_cfg_t *config_struct_ptr) {
 
     if (nullptr == config_struct_ptr) {
