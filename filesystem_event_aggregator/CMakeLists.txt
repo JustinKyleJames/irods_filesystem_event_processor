@@ -73,7 +73,7 @@ add_executable(filesystem_event_aggregator
     ${PROJECT_SOURCE_DIR}/src/irods_ops.cpp 
     ${PROJECT_SOURCE_DIR}/src/config.cpp 
     ${PROJECT_SOURCE_DIR}/src/main.cpp 
-    ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp
     ${PROJECT_SOURCE_DIR}/../common/change_table_avro.hpp
     ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json
     ${PROJECT_SOURCE_DIR}/../common/change_table_avro_schema.json)
@@ -84,8 +84,8 @@ add_custom_command(TARGET filesystem_event_aggregator PRE_BUILD
                        COMMAND ${CMAKE_COMMAND} -E copy
                        ${CMAKE_SOURCE_DIR}/src/filesystem_event_aggregator_config.json ${CMAKE_CURRENT_BINARY_DIR}/filesystem_event_aggregator_config.json)
 
-add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
-    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp -n fs_event)
+add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp
+    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp -n fs_event)
 
 add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/change_table_avro.hpp
     COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/change_table_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/change_table_avro.hpp -n file_system_event_aggregator)

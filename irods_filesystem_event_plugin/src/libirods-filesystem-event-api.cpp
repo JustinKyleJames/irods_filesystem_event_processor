@@ -124,7 +124,7 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
     // read and populate the register_map which holds a mapping of physical paths to irods paths
     std::vector<std::pair<std::string, std::string> > register_map;
     for (auto entry : changeMap.registerMap) {
-        std::string physical_path(entry.filePath);
+        std::string physical_path(entry.physical_path);
         std::string irods_register_path(entry.irodsRegisterPath);
         register_map.push_back(std::make_pair(physical_path, irods_register_path));
     }
@@ -199,69 +199,49 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
     std::string metadata_key_for_storage_tiering_time_violation = changeMap.metadataKeyForStorageTieringTimeViolation;
 
     // for batched file inserts 
-    std::vector<std::string> objectIdentifer_list_for_create;
+    std::vector<std::string> object_identifier_list_for_create;
     std::vector<std::string> physical_path_list;
     std::vector<std::string> object_name_list;
-    std::vector<std::string> parent_objectIdentifer_list;
+    std::vector<std::string> target_parent_object_identifier_list;
     std::vector<int64_t> file_size_list;
 
     // for batched file deletes
-    std::vector<std::string> objectIdentifer_list_for_unlink;
+    std::vector<std::string> object_identifier_list_for_unlink;
 
     for (auto entry : changeMap.entries) {
 
-        const file_system_event_aggregator::EventTypeEnum event_type = entry.eventType;
-        std::string objectIdentifer(entry.objectIdentifier);
-        std::string physical_path(entry.filePath);
-        std::string object_name(entry.objectName);
-        const file_system_event_aggregator::ObjectTypeEnum object_type = entry.objectType;
-        std::string parent_objectIdentifer(entry.parentObjectIdentifier);
-        int64_t file_size = entry.fileSize;
-
         // Handle changes in iRODS
 
-        if (event_type == file_system_event_aggregator::EventTypeEnum::CREATE) {
+        if (entry.event_type == file_system_event_aggregator::EventTypeEnum::CREATE) {
             if (direct_db_modification_requested) {
-                objectIdentifer_list_for_create.push_back(objectIdentifer);
-                physical_path_list.push_back(physical_path);
-                object_name_list.push_back(object_name);
-                parent_objectIdentifer_list.push_back(parent_objectIdentifer);
-                file_size_list.push_back(file_size);
+                object_identifier_list_for_create.push_back(entry.object_identifier);
+                physical_path_list.push_back(entry.target_physical_path);
+                object_name_list.push_back(entry.object_name);
+                target_parent_object_identifier_list.push_back(entry.target_parent_object_identifier);
+                file_size_list.push_back(entry.file_size);
             } else {
-                handle_create(register_map, resource_id, resource_name,
-                        objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                        _comm, icss, user_id, direct_db_modification_requested);
+                handle_create(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
             }
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::MKDIR) {
-            handle_mkdir(register_map, resource_id, resource_name,
-                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                    _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::OTHER) {
-            handle_other(register_map, resource_id, resource_name,
-                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                    _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::RENAME and object_type == file_system_event_aggregator::ObjectTypeEnum::FILE) {
-            handle_rename_file(register_map, resource_id, resource_name,
-                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                    _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::RENAME and object_type == file_system_event_aggregator::ObjectTypeEnum::DIR) {
-            handle_rename_dir(register_map, resource_id, resource_name,
-                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                    _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::UNLINK) {
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::MKDIR) {
+            handle_mkdir(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::OTHER) {
+            handle_other(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::RENAME && 
+                   entry.object_type == file_system_event_aggregator::ObjectTypeEnum::FILE) {
+            handle_rename_file(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::RENAME && 
+                   entry.object_type == file_system_event_aggregator::ObjectTypeEnum::DIR) {
+            handle_rename_dir(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::UNLINK) {
             if (direct_db_modification_requested) {
-                objectIdentifer_list_for_unlink.push_back(objectIdentifer);
+                object_identifier_list_for_unlink.push_back(entry.object_identifier);
             } else {
-                handle_unlink(register_map, resource_id, resource_name,
-                        objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                        _comm, icss, user_id, direct_db_modification_requested);
+                handle_unlink(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
             }
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::RMDIR) {
-            handle_rmdir(register_map, resource_id, resource_name,
-                    objectIdentifer, physical_path, object_name, object_type, parent_objectIdentifer, file_size,
-                    _comm, icss, user_id, direct_db_modification_requested);
-        } else if (event_type == file_system_event_aggregator::EventTypeEnum::WRITE_FID) {
-            handle_write_fid(register_map, physical_path, objectIdentifer, _comm, icss, direct_db_modification_requested);
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::RMDIR) {
+            handle_rmdir(register_map, resource_id, resource_name, entry, _comm, icss, user_id, direct_db_modification_requested);
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::WRITE_FID) {
+            handle_write_fid(register_map, entry.target_physical_path, entry.object_identifier, _comm, icss, direct_db_modification_requested);
         }
 
 
@@ -269,13 +249,13 @@ int rs_handle_records( rsComm_t* _comm, irodsFsEventApiInp_t* _inp, irodsFsEvent
 
     if (direct_db_modification_requested) {
 
-        if (objectIdentifer_list_for_unlink.size() > 0) {
-            handle_batch_unlink(objectIdentifer_list_for_unlink, resource_id, maximum_records_per_sql_command, _comm, icss);
+        if (object_identifier_list_for_unlink.size() > 0) {
+            handle_batch_unlink(object_identifier_list_for_unlink, resource_id, maximum_records_per_sql_command, _comm, icss);
         }
  
-        if (objectIdentifer_list_for_create.size() > 0) {
+        if (object_identifier_list_for_create.size() > 0) {
             handle_batch_create(register_map, resource_id, resource_name,
-                    objectIdentifer_list_for_create, physical_path_list, object_name_list, parent_objectIdentifer_list, file_size_list,
+                    object_identifier_list_for_create, physical_path_list, object_name_list, target_parent_object_identifier_list, file_size_list,
                     maximum_records_per_sql_command, _comm, icss, user_id, set_metadata_for_storage_tiering_time_violation,
                     metadata_key_for_storage_tiering_time_violation);
         }

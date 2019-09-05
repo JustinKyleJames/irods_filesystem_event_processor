@@ -24,7 +24,7 @@
 #include "irods_filesystem_event_processor_errors.hpp"
 #include "logging.hpp"
 #include "main.hpp"
-#include "file_system_event.hpp"
+#include "file_system_event_avro.hpp"
 
 // avro headers
 #include "avro/Encoder.hh"
@@ -155,7 +155,7 @@ int get_fidstr_from_record(changelog_rec_ptr rec, std::string& fidstr) {
 
 }
 
-int get_full_path_from_record(const std::string& root_path, changelog_rec_ptr rec, std::string& lustre_full_path) {
+int get_physical_path_from_record(const std::string& root_path, changelog_rec_ptr rec, std::string& lustre_physical_path) {
 
     if (nullptr == rec) {
         LOG(LOG_ERR, "Null rec sent to %s - %d\n", __FUNCTION__, __LINE__);
@@ -167,7 +167,7 @@ int get_full_path_from_record(const std::string& root_path, changelog_rec_ptr re
     int linkno = 0;
     int rc;
 
-    char lustre_full_path_cstr[MAX_NAME_LEN] = {};
+    char lustre_physical_path_cstr[MAX_NAME_LEN] = {};
 
     // use fidstr to get path
 
@@ -176,14 +176,14 @@ int get_full_path_from_record(const std::string& root_path, changelog_rec_ptr re
         return rc;
     }
 
-    rc = llapi_fid2path_wrapper(root_path.c_str(), fidstr.c_str(), lustre_full_path_cstr, MAX_NAME_LEN, &recno, &linkno);
+    rc = llapi_fid2path_wrapper(root_path.c_str(), fidstr.c_str(), lustre_physical_path_cstr, MAX_NAME_LEN, &recno, &linkno);
 
     if (rc < 0) {
         return irods_filesystem_event_processor_error::LUSTRE_OBJECT_DNE_ERROR;        
     }
 
-    // add root path to lustre_full_path
-    lustre_full_path = concatenate_paths_with_boost(root_path, lustre_full_path_cstr);
+    // add root path to lustre_physical_path
+    lustre_physical_path = concatenate_paths_with_boost(root_path, lustre_physical_path_cstr);
 
     return irods_filesystem_event_processor_error::SUCCESS;
 }
@@ -205,19 +205,20 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
 
     fs_event::filesystem_event event;
     event.root_path = lustre_root_path;
-    event.index = get_cr_index_from_changelog_rec(rec);
+    event.change_record_index = get_cr_index_from_changelog_rec(rec);
 
-    get_fidstr_from_record(rec, event.entryId);
-    std::string lustre_full_path;
-    int rc = get_full_path_from_record(lustre_root_path, rec, lustre_full_path);
+    get_fidstr_from_record(rec, event.object_identifier);
+    std::string lustre_physical_path;
+    int rc = get_physical_path_from_record(lustre_root_path, rec, lustre_physical_path);
     if (irods_filesystem_event_processor_error::SUCCESS != rc && irods_filesystem_event_processor_error::LUSTRE_OBJECT_DNE_ERROR != rc) {
         return rc;
     }
 
-    event.targetParentId = convert_to_fidstr(get_cr_pfid_from_changelog_rec(rec));
+    event.target_parent_object_identifier = convert_to_fidstr(get_cr_pfid_from_changelog_rec(rec));
 
-    event.basename = get_basename(lustre_full_path);
-    event.full_path = lustre_full_path;
+    event.object_name = get_basename(lustre_physical_path);
+    event.source_physical_path = "";
+    event.target_physical_path = lustre_physical_path;
 
 
     // TODO object name vs basename
@@ -265,10 +266,11 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
         }
         event.event_type = "RENAME";
 
-        // for renames, the old path goes in full_path and the new name goes is full_target_path
+        // for renames, the old path goes in physical_path and the new name goes is target_physical_path
         old_lustre_path = lustre_root_path + old_parent_path + old_filename;
-        event.full_target_path = event.full_path; 
-        event.full_path = old_lustre_path;
+        event.target_physical_path = event.target_physical_path; 
+        event.source_physical_path = old_lustre_path;
+        event.source_parent_object_identifier = old_parent_fid; 
 
     } else if (cr_type == get_cl_trunc()) {
         event.event_type = "TRUNCATE";
@@ -360,14 +362,15 @@ int run_main_changelog_reader_loop(const lustre_event_listener_cfg_t& config_str
 
     // Add MKDIR event for root path and send to event aggregator
     fs_event::filesystem_event event;
-    event.index = 0;
+    event.change_record_index = 0;
     event.event_type = "MKDIR";
     event.root_path = config_struct.lustre_root_path; 
-    event.entryId = get_fidstr_from_path(config_struct.lustre_root_path); 
-    event.targetParentId = "";
-    event.basename = "";
-    event.full_target_path = "";
-    event.full_path = config_struct.lustre_root_path;
+    event.object_identifier = get_fidstr_from_path(config_struct.lustre_root_path); 
+    event.source_parent_object_identifier = "";
+    event.target_parent_object_identifier = "";
+    event.object_name = "";
+    event.source_physical_path = "";
+    event.target_physical_path = config_struct.lustre_root_path;
 
     // send the event and ignore result
     try {

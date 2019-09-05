@@ -2,11 +2,12 @@
         "irods_resource_name": "demoResc",
         "irods_api_update_type": "policy",
         "log_level": "LOG_DBG",
-        "irods_client_connect_failure_retry_seconds": 30,
-        "irods_client_broadcast_address": "ipc:///irods_client_broadcast_events",
+        "irods_updater_connect_failure_retry_seconds": 30,
+        "irods_updater_thread_count": 3,
+        "irods_updater_sleep_time_seconds": 2,
+        "irods_updater_broadcast_address": "ipc:///irods_client_broadcast_events",
         "changelog_reader_broadcast_address": "ipc:///changelog_reader_broadcast_events",
         "event_aggregator_address": "ipc:///changelog_reader_push_work_events",
-        "irods_updater_thread_count": 5,
         "maximum_records_per_update_to_irods": 200,
         "maximum_records_per_sql_command": 1,
         "maximum_queued_records": 100000,
@@ -21,21 +22,20 @@
                 "irods_register_path": "/tempZone/home"
             },
             {
-                "physical_path": "/mnt/lustre/rods",
-                "irods_register_path": "/tempZone/home/rods"
-            },
-            {
                 "physical_path": "/mnt/lustre",
                 "irods_register_path": "/tempZone/home/public"
             }
         ],
-
 
         "thread_1_connection_parameters": {
                  "irods_host": "localhost",
                  "irods_port": "1247"
         },
         "thread_2_connection_parameters": {
+                 "irods_host": "localhost",
+                 "irods_port": "1247"
+        },
+        "thread_3_connection_parameters": {
                  "irods_host": "localhost",
                  "irods_port": "1247"
         }

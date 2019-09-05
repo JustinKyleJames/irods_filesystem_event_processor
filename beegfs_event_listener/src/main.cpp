@@ -34,7 +34,7 @@
 #include "beegfs/beegfs_file_event_log.hpp"
 
 // common headers
-#include "file_system_event.hpp"
+#include "file_system_event_avro.hpp"
 
 // avro headers
 #include "avro/Encoder.hh"
@@ -115,12 +115,12 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zm
 
     // populate event to send to even aggregator 
     fs_event::filesystem_event event;
-    event.index = get_current_time_ns();
+    event.change_record_index = get_current_time_ns();
     event.root_path = root_path;
-    event.entryId = packet.entryId;
-    event.targetParentId = packet.parentEntryId;
-    event.basename = get_basename(packet.path);
-    event.full_path = concatenate_paths_with_boost(root_path, packet.path);
+    event.object_identifier = packet.entryId;
+    event.target_parent_object_identifier = packet.parentEntryId;
+    event.object_name = get_basename(packet.path);
+    event.target_physical_path = concatenate_paths_with_boost(root_path, packet.path);
 
     bool skip_event = false;
 
@@ -142,8 +142,11 @@ bool handle_event(const BeeGFS::packet& packet, const std::string& root_path, zm
             break;
         case BeeGFS::FileEventType::RENAME:
             event.event_type = "RENAME";
-            event.basename = get_basename(packet.targetPath); 
-            event.full_target_path = concatenate_paths_with_boost(root_path, packet.targetPath);
+            event.object_name = get_basename(packet.targetPath); 
+            event.source_parent_object_identifier = packet.parentEntryId;
+            event.target_parent_object_identifier = packet.targetParentId;
+            event.source_physical_path = concatenate_paths_with_boost(root_path, packet.path);
+            event.target_physical_path = concatenate_paths_with_boost(root_path, packet.targetPath);
             break;
         case BeeGFS::FileEventType::TRUNCATE:
             event.event_type = "TRUNCATE";
@@ -238,14 +241,15 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
 
     // Add MKDIR event for root path and send to event aggregator
     fs_event::filesystem_event event;
-    event.index = get_current_time_ns();
+    event.change_record_index = get_current_time_ns();
     event.event_type = "MKDIR";
     event.root_path = config_struct.beegfs_root_path; 
-    event.entryId = "root"; 
-    event.targetParentId = "";
-    event.basename = "";
-    event.full_target_path = "";
-    event.full_path = config_struct.beegfs_root_path;
+    event.object_identifier = "root"; 
+    event.source_parent_object_identifier = "";
+    event.target_parent_object_identifier = "";
+    event.object_name = "";
+    event.source_physical_path = "";
+    event.target_physical_path = config_struct.beegfs_root_path;
 
     // send the event and ignore result
     try {

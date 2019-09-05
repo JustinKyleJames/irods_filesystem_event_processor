@@ -63,11 +63,11 @@ include_directories(/usr/include/irods
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,-z,defs")
 
 add_executable(beegfs_event_listener 
-    ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp
     ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json
     ${PROJECT_SOURCE_DIR}/src/config.cpp 
     ${PROJECT_SOURCE_DIR}/src/main.cpp 
-    ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp)
+    ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp)
 
 set_target_properties(beegfs_event_listener PROPERTIES LINKER_LANGUAGE CXX)
 
@@ -75,6 +75,6 @@ add_custom_command(TARGET beegfs_event_listener PRE_BUILD
                        COMMAND ${CMAKE_COMMAND} -E copy
                        ${CMAKE_SOURCE_DIR}/src/beegfs_event_listener_config.json ${CMAKE_CURRENT_BINARY_DIR}/beegfs_event_listener_config.json)
 
-add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp
-    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/file_system_event.hpp -n fs_event)
+add_custom_command(OUTPUT ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp
+    COMMAND ${IRODS_EXTERNALS_FULLPATH_AVRO}/bin/avrogencpp -i ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro_schema.json -o ${PROJECT_SOURCE_DIR}/../common/file_system_event_avro.hpp -n fs_event)
 

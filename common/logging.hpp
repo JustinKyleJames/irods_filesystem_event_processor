@@ -9,6 +9,7 @@
 #define LOG_WARN     (3)
 #define LOG_INFO     (4)
 #define LOG_DBG      (5)
+#define LOG_TRACE    (6)
 
 #define LOG(level, format_str, ...) do {  \
                                 if (level <= log_level) { \
@@ -36,6 +37,10 @@
                                         break; \
                                       case 5: \
                                         fprintf(dbgstream, (IRODS_EVENT_AGGREGATOR_DEBUG_LOGGING_time_str + std::string(":DEBUG:%s: ") + format_str + "\n").c_str(), thread_identifier, ##__VA_ARGS__); \
+                                        fflush(dbgstream); \
+                                        break; \
+                                      case 6: \
+                                        fprintf(dbgstream, (IRODS_EVENT_AGGREGATOR_DEBUG_LOGGING_time_str + std::string(":TRACE:%s: ") + format_str + "\n").c_str(), thread_identifier, ##__VA_ARGS__); \
                                         fflush(dbgstream); \
                                         break; \
                                     } \

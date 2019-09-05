@@ -10,21 +10,22 @@
                     "name": "ChangeDescriptor",
                     "type": "record",
                     "fields": [
-                        {"name": "objectIdentifier", "type": "string"},
-                        {"name": "parentObjectIdentifier", "type": "string"},
-                        {"name": "objectName", "type": "string"},
-                        {"name": "filePath", "type": "string"},
-
-                        {"name": "eventType", "type": 
+                        {"name": "object_identifier", "type": "string"},
+                        {"name": "source_parent_object_identifier", "type": "string"},
+                        {"name": "target_parent_object_identifier", "type": "string"},
+                        {"name": "object_name", "type": "string"},
+                        {"name": "source_physical_path", "type": "string"},
+                        {"name": "target_physical_path", "type": "string"},
+                        {"name": "event_type", "type": 
                             { "type": "enum", "name": "EventTypeEnum", "symbols": ["OTHER", "CREATE", "UNLINK", "RMDIR", "MKDIR", "RENAME", "WRITE_FID"] } 
                         },
-                        {"name": "objectType", "type": 
+                        {"name": "object_type", "type": 
                             { "type": "enum", "name": "ObjectTypeEnum", "symbols": ["FILE", "DIR"] }
                         },
                         {"name": "timestamp", "type": "long"},
                         {"name": "operComplete", "type": "boolean"},
-                        {"name": "fileSize", "type": "long"},
-                        {"name": "crIndex", "type": "long"}
+                        {"name": "file_size", "type": "long"},
+                        {"name": "change_record_index", "type": "long"}
                     ]
                 }
             }
@@ -37,7 +38,7 @@
                     "name": "RegisterMapEntry",
                     "type": "record",
                     "fields": [
-                        {"name": "filePath", "type": "string"},
+                        {"name": "physical_path", "type": "string"},
                         {"name": "irodsRegisterPath", "type": "string"}
                     ]
                 }

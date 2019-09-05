@@ -28,6 +28,7 @@
 // common headers
 #include "../../common/irods_filesystem_event_processor_errors.hpp"
 #include "../../common/change_table_avro.hpp"
+#include "../../common/file_system_event_avro.hpp"
 
 // sqlite
 #include <sqlite3.h>
@@ -35,8 +36,21 @@
 std::string event_type_to_str(file_system_event_aggregator::EventTypeEnum type);
 std::string object_type_to_str(file_system_event_aggregator::ObjectTypeEnum type);
 
+change_descriptor filesystem_event_to_change_descriptor(const fs_event::filesystem_event& e) {
+    
+        change_descriptor entry{};
+        entry.change_record_index = e.change_record_index;
+        entry.object_identifier = e.object_identifier;
+        entry.source_parent_object_identifier = e.source_parent_object_identifier;
+        entry.target_parent_object_identifier = e.target_parent_object_identifier;
+        entry.object_name = e.object_name;
+        entry.source_physical_path = e.source_physical_path; 
+        entry.target_physical_path = e.target_physical_path; 
+        entry.timestamp = time(NULL);
 
-//using namespace boost::interprocess;
+        return entry;
+}
+
 
 //static boost::shared_mutex change_table_mutex;
 static std::mutex change_table_mutex;
@@ -47,60 +61,54 @@ size_t get_change_table_size(change_map_t& change_map) {
 }
     
 
-int write_objectId_to_root_dir(const std::string& fs_mount_path, const std::string& objectId, change_map_t& change_map) {
+int write_object_identifier_to_root_dir(const std::string& fs_mount_path, const std::string& object_identifier, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
     change_descriptor entry{};
-    entry.cr_index = 0;
-    entry.objectId = objectId;
-    entry.parent_objectId = "";
+    entry.change_record_index = 0;
+    entry.object_identifier = object_identifier;
+    entry.source_parent_object_identifier = "";
+    entry.target_parent_object_identifier = "";
     entry.object_name = "";
     entry.object_type = file_system_event_aggregator::ObjectTypeEnum::DIR;
-    entry.physical_path = fs_mount_path;
+    entry.target_physical_path = fs_mount_path;
     entry.oper_complete = true;
     entry.timestamp = time(NULL);
-    entry.last_event = file_system_event_aggregator::EventTypeEnum::WRITE_FID;
+    entry.event_type = file_system_event_aggregator::EventTypeEnum::WRITE_FID;
     change_map.insert(entry);
 
     return irods_filesystem_event_processor_error::SUCCESS;
 
 }
 
-int handle_close(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_close(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
  
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
     struct stat st;
-    int result = stat(physical_path.c_str(), &st);
+    int result = stat(event.target_physical_path.c_str(), &st);
 
-    LOG(LOG_DBG, "stat(%s, &st)", physical_path.c_str());
+    LOG(LOG_DBG, "stat(%s, &st)", event.target_physical_path.c_str());
     LOG(LOG_DBG, "handle_close:  stat_result = %i, file_size = %ld", result, st.st_size);
 
-    auto iter = change_map_objectId.find(objectId);
-    if (change_map_objectId.end() != iter) {
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if (change_map_object_identifier.end() != iter) {
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
         if (0 == result) {
-            change_map_objectId.modify(iter, [st](change_descriptor &cd){ cd.file_size = st.st_size; });
+            change_map_object_identifier.modify(iter, [st](change_descriptor &cd){ cd.file_size = st.st_size; });
         }
     } else {
         // this is probably an append so no file update is done
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        entry.parent_objectId = parent_objectId;
-        entry.object_name = object_name;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.object_type = (result == 0 && S_ISDIR(st.st_mode)) ? file_system_event_aggregator::ObjectTypeEnum::DIR : file_system_event_aggregator::ObjectTypeEnum::FILE;
-        entry.physical_path = physical_path; 
         entry.oper_complete = true;
-        entry.timestamp = time(NULL);
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::OTHER;
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::OTHER;
         if (0 == result) {
             entry.file_size = st.st_size;
         }
@@ -111,32 +119,25 @@ int handle_close(unsigned long long cr_index, const std::string& fs_mount_path, 
 
 }
 
-int handle_mkdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_mkdir(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
-    LOG(LOG_ERR, "handle_mkdir:  parent_objectId=%s", parent_objectId.c_str());
+    LOG(LOG_ERR, "handle_mkdir:  target_parent_object_identifier=%s", event.target_parent_object_identifier.c_str());
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
-    auto iter = change_map_objectId.find(objectId);
-    if(iter != change_map_objectId.end()) {
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.last_event = file_system_event_aggregator::EventTypeEnum::MKDIR; });
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if(iter != change_map_object_identifier.end()) {
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.event_type = file_system_event_aggregator::EventTypeEnum::MKDIR; });
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        entry.parent_objectId = parent_objectId;
-        entry.object_name = object_name;
-        entry.physical_path = physical_path;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.oper_complete = true;
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::MKDIR;
-        entry.timestamp = time(NULL);
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::MKDIR;
         entry.object_type = file_system_event_aggregator::ObjectTypeEnum::DIR;
         change_map.insert(entry);
     }
@@ -144,34 +145,29 @@ int handle_mkdir(unsigned long long cr_index, const std::string& fs_mount_path, 
 
 }
 
-int handle_rmdir(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_rmdir(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
 
-    auto iter = change_map_objectId.find(objectId);
-    if(iter != change_map_objectId.end()) {
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [parent_objectId](change_descriptor &cd){ cd.parent_objectId = parent_objectId; });
-        change_map_objectId.modify(iter, [object_name](change_descriptor &cd){ cd.object_name = object_name; });
-        change_map_objectId.modify(iter, [physical_path](change_descriptor &cd){ cd.physical_path = physical_path; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.last_event = file_system_event_aggregator::EventTypeEnum::RMDIR; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if(iter != change_map_object_identifier.end()) {
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.source_parent_object_identifier = event.source_parent_object_identifier; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_parent_object_identifier = event.target_parent_object_identifier; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.object_name = event.object_name; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_physical_path = event.target_physical_path; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.event_type = file_system_event_aggregator::EventTypeEnum::RMDIR; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.oper_complete = true;
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::RMDIR;
-        entry.timestamp = time(NULL);
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::RMDIR;
         entry.object_type = file_system_event_aggregator::ObjectTypeEnum::DIR;
-        entry.parent_objectId = parent_objectId;
-        entry.object_name = object_name;
         change_map.insert(entry);
     }
     return irods_filesystem_event_processor_error::SUCCESS; 
@@ -179,132 +175,113 @@ int handle_rmdir(unsigned long long cr_index, const std::string& fs_mount_path, 
 
 }
 
-int handle_unlink(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                  const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_unlink(const fs_event::filesystem_event& event, change_map_t& change_map) {
   
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
 
-    auto iter = change_map_objectId.find(objectId);
-    if(iter != change_map_objectId.end()) {   
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if(iter != change_map_object_identifier.end()) {   
 
         // If an add and a delete occur in the same transactional unit, just delete the transaction
-        if (file_system_event_aggregator::EventTypeEnum::CREATE == iter->last_event) {
-            change_map_objectId.erase(iter);
+        if (file_system_event_aggregator::EventTypeEnum::CREATE == iter->event_type) {
+            change_map_object_identifier.erase(iter);
         } else {
-            change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-            change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
-            change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.last_event = file_system_event_aggregator::EventTypeEnum::UNLINK; });
-            change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+            change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+            change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = true; });
+            change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.event_type = file_system_event_aggregator::EventTypeEnum::UNLINK; });
+            change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
        }
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        entry.parent_objectId = parent_objectId;
-        entry.physical_path = physical_path;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.oper_complete = true;
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::UNLINK;
-        entry.timestamp = time(NULL);
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::UNLINK;
         entry.object_type = file_system_event_aggregator::ObjectTypeEnum::FILE;
-        entry.object_name = object_name;
         change_map.insert(entry);
     }
 
     return irods_filesystem_event_processor_error::SUCCESS; 
 }
 
-int handle_rename(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                  const std::string& object_name, const std::string& physical_path, const std::string& old_physical_path, change_map_t& change_map) {
+int handle_rename(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
-    auto iter = change_map_objectId.find(objectId);
+    auto iter = change_map_object_identifier.find(event.object_identifier);
     std::string original_path;
 
     struct stat statbuf;
-    bool is_dir = stat(physical_path.c_str(), &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
+    bool is_dir = stat(event.target_physical_path.c_str(), &statbuf) == 0 && S_ISDIR(statbuf.st_mode);
 
     // if there is a previous entry, just update the physical_path to the new path
     // otherwise, add a new entry
-    if(iter != change_map_objectId.end()) {
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [parent_objectId](change_descriptor &cd){ cd.parent_objectId = parent_objectId; });
-        change_map_objectId.modify(iter, [object_name](change_descriptor &cd){ cd.object_name = object_name; });
-        change_map_objectId.modify(iter, [physical_path](change_descriptor &cd){ cd.physical_path = physical_path; });
+    if(iter != change_map_object_identifier.end()) {
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.object_name = event.object_name; });
+
+        // Only update the target fields.  If the previous event was a RENAME then the source should remain what was set previously since these two
+        // events are being combined.  If the previous event was something else, keep the same event type but update the targets.
+        // For example, a CREATE/CLOSE followed by a move, just update the targets.
+        // TODO - test
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_parent_object_identifier = event.target_parent_object_identifier; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_physical_path = event.target_physical_path; });
+
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        entry.parent_objectId = parent_objectId;
-        entry.object_name = object_name;
-        entry.physical_path = physical_path;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.oper_complete = true;
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::RENAME;
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::RENAME;
         entry.timestamp = time(NULL);
         if (is_dir) {
             entry.object_type = file_system_event_aggregator::ObjectTypeEnum::DIR;
         } else  {
             entry.object_type = file_system_event_aggregator::ObjectTypeEnum::FILE;
         }
-        /*if (is_dir) {
-            change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.object_type = file_system_event_aggregator::ObjectTypeEnum::DIR; });
-        } else {
-            change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.object_type = file_system_event_aggregator::ObjectTypeEnum::FILE; });
-        }*/
         change_map.insert(entry);
     }
 
-    LOG(LOG_DBG, "rename:  old_physical_path = %s", old_physical_path.c_str());
+    LOG(LOG_DBG, "rename:  event.target_physical_path = %s", event.target_physical_path.c_str());
 
     if (is_dir) {
 
         // search through and update all references in table
-        for (auto iter = change_map_objectId.begin(); iter != change_map_objectId.end(); ++iter) {
-            std::string p = iter->physical_path;
-            if (p.length() > 0 && p.length() != old_physical_path.length() && boost::starts_with(p, old_physical_path)) {
-                change_map_objectId.modify(iter, [old_physical_path, physical_path](change_descriptor &cd){ cd.physical_path.replace(0, old_physical_path.length(), physical_path); });
+        for (auto iter = change_map_object_identifier.begin(); iter != change_map_object_identifier.end(); ++iter) {
+            std::string p = iter->target_physical_path;
+            if (p.length() > 0 && p.length() != event.target_physical_path.length() && boost::starts_with(p, event.target_physical_path)) {
+                change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_physical_path.replace(0, event.target_physical_path.length(), event.target_physical_path); });
             }
         }
     }
     return irods_filesystem_event_processor_error::SUCCESS; 
 
-
 }
 
-int handle_create(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                  const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_create(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
-    auto iter = change_map_objectId.find(objectId);
-    if(iter != change_map_objectId.end()) {
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [parent_objectId](change_descriptor &cd){ cd.parent_objectId = parent_objectId; });
-        change_map_objectId.modify(iter, [object_name](change_descriptor &cd){ cd.object_name = object_name; });
-        change_map_objectId.modify(iter, [physical_path](change_descriptor &cd){ cd.physical_path = physical_path; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.last_event = file_system_event_aggregator::EventTypeEnum::CREATE; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if(iter != change_map_object_identifier.end()) {
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.source_parent_object_identifier = event.source_parent_object_identifier; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_parent_object_identifier = event.target_parent_object_identifier; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.object_name = event.object_name; });
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.target_physical_path = event.target_physical_path; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.event_type = file_system_event_aggregator::EventTypeEnum::CREATE; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        entry.parent_objectId = parent_objectId;
-        entry.object_name = object_name;
-        entry.physical_path = physical_path;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.oper_complete = false;
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::CREATE;
-        entry.timestamp = time(NULL);
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::CREATE;
         entry.object_type = file_system_event_aggregator::ObjectTypeEnum::FILE;
         change_map.insert(entry);
     }
@@ -313,29 +290,22 @@ int handle_create(unsigned long long cr_index, const std::string& fs_mount_path,
 
 }
 
-int handle_mtime(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_mtime(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
-    auto iter = change_map_objectId.find(objectId);
-    if(iter != change_map_objectId.end()) {   
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if(iter != change_map_object_identifier.end()) {   
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        //entry.parent_objectId = parent_objectId;
-        //entry.physical_path = physical_path;
-        //entry.object_name = object_name;
-        entry.last_event = file_system_event_aggregator::EventTypeEnum::OTHER;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
+        entry.event_type = file_system_event_aggregator::EventTypeEnum::OTHER;
         entry.oper_complete = false;
-        entry.timestamp = time(NULL);
         change_map.insert(entry);
     }
 
@@ -343,36 +313,29 @@ int handle_mtime(unsigned long long cr_index, const std::string& fs_mount_path, 
 
 }
 
-int handle_trunc(unsigned long long cr_index, const std::string& fs_mount_path, const std::string& objectId, const std::string& parent_objectId,
-                 const std::string& object_name, const std::string& physical_path, change_map_t& change_map) {
+int handle_trunc(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with hashed index of objectId
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with hashed index of object_identifier
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
     struct stat st;
-    int result = stat(physical_path.c_str(), &st);
+    int result = stat(event.target_physical_path.c_str(), &st);
 
     LOG(LOG_DBG, "handle_trunc:  stat_result = %i, file_size = %ld", result, st.st_size);
 
-    auto iter = change_map_objectId.find(objectId);
-    if(iter != change_map_objectId.end()) {
-        change_map_objectId.modify(iter, [cr_index](change_descriptor &cd){ cd.cr_index = cr_index; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
-        change_map_objectId.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
+    auto iter = change_map_object_identifier.find(event.object_identifier);
+    if(iter != change_map_object_identifier.end()) {
+        change_map_object_identifier.modify(iter, [event](change_descriptor &cd){ cd.change_record_index = event.change_record_index; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.oper_complete = false; });
+        change_map_object_identifier.modify(iter, [](change_descriptor &cd){ cd.timestamp = time(NULL); });
         if (0 == result) {
-            change_map_objectId.modify(iter, [st](change_descriptor &cd){ cd.file_size = st.st_size; });
+            change_map_object_identifier.modify(iter, [st](change_descriptor &cd){ cd.file_size = st.st_size; });
         }
     } else {
-        change_descriptor entry{};
-        entry.cr_index = cr_index;
-        entry.objectId = objectId;
-        //entry.parent_objectId = parent_objectId;
-        //entry.physical_path = physical_path;
-        //entry.object_name = object_name;
+        change_descriptor entry = filesystem_event_to_change_descriptor(event);
         entry.oper_complete = false;
-        entry.timestamp = time(NULL);
         if (0 == result) {
             entry.file_size = st.st_size;
         }
@@ -384,14 +347,14 @@ int handle_trunc(unsigned long long cr_index, const std::string& fs_mount_path, 
 
 }
 
-int remove_objectId_from_table(const std::string& objectId, change_map_t& change_map) {
+int remove_object_identifier_from_table(const std::string& object_identifier, change_map_t& change_map) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
-    // get change map with index of objectId 
-    auto &change_map_objectId = change_map.get<change_descriptor_objectId_idx>();
+    // get change map with index of object_identifier 
+    auto &change_map_object_identifier = change_map.get<change_descriptor_object_identifier_idx>();
 
-    change_map_objectId.erase(objectId);
+    change_map_object_identifier.erase(object_identifier);
 
     return irods_filesystem_event_processor_error::SUCCESS;
 }
@@ -399,8 +362,8 @@ int remove_objectId_from_table(const std::string& objectId, change_map_t& change
 // This is just a debugging function
 void write_change_table_to_str(const change_map_t& change_map, std::string& buffer) {
 
-    boost::format change_record_header_format_obj("\n%-15s %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %-10s\n");
-    boost::format change_record_format_obj("%015u %-30s %-30s %-12s %-20s %-30s %-17s %-11s %-16s %lu\n");
+    boost::format change_record_header_format_obj("\n%-15s %-30s %-33s %-33s %-12s %-20s %-30s %-30s %-17s %-11s %-16s %-10s\n");
+    boost::format change_record_format_obj("%015u %-30s %-33s %-33s %-12s %-20s %-30s %-30s %-17s %-11s %-16s %lu\n");
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -409,24 +372,27 @@ void write_change_table_to_str(const change_map_t& change_map, std::string& buff
 
     char time_str[18];
 
-    buffer = str(change_record_header_format_obj % "CR_INDEX" % "FIDSTR" % "PARENT_FIDSTR" % "OBJECT_TYPE" % "OBJECT_NAME" % "PHYSICAL_PATH" % "TIME" %
-            "EVENT_TYPE" % "OPER_COMPLETE?" % "FILE_SIZE");
+    buffer = str(change_record_header_format_obj % "CR_INDEX" % "OBJECT_IDENTIFIER" % "SOURCE_PARENT_OBJECT_IDENTIFIER" % "TARGET_PARENT_OBJECT_IDENTIFIER" % "OBJECT_TYPE" % "OBJECT_NAME" % 
+            "SOURCE_PHYSICAL_PATH" % "TARGET_PHYSICAL_PATH" % "TIME" % "EVENT_TYPE" % "OPER_COMPLETE?" % "FILE_SIZE");
 
-    buffer += str(change_record_header_format_obj % "--------" % "------" % "-------------" % "-----------"% "-----------" % "-------------" % "----" % 
-            "----------" % "--------------" % "---------");
+    buffer += str(change_record_header_format_obj % "--------" % "----------------" % "-------------------------------" % "-------------------------------" % "-----------" % "-----------" % 
+            "--------------------" % "--------------------" % "----" % "----------" % "--------------" % "---------");
 
     for (auto iter = change_map_seq.begin(); iter != change_map_seq.end(); ++iter) {
-         std::string objectId = iter->objectId;
+         std::string object_identifier = iter->object_identifier;
 
          struct tm *timeinfo;
          timeinfo = localtime(&iter->timestamp);
          strftime(time_str, sizeof(time_str), "%Y%m%d %I:%M:%S", timeinfo);
 
-         buffer += str(change_record_format_obj % iter->cr_index % objectId.c_str() % iter->parent_objectId.c_str() %
+         buffer += str(change_record_format_obj % iter->change_record_index % object_identifier.c_str() % 
+                 iter->source_parent_object_identifier.c_str() %
+                 iter->target_parent_object_identifier.c_str() %
                  object_type_to_str(iter->object_type).c_str() %
                  iter->object_name.c_str() % 
-                 iter->physical_path.c_str() % time_str % 
-                 event_type_to_str(iter->last_event).c_str() %
+                 iter->source_physical_path.c_str() %  
+                 iter->target_physical_path.c_str() % time_str % 
+                 event_type_to_str(iter->event_type).c_str() %
                  (iter->oper_complete == 1 ? "true" : "false") % iter->file_size);
 
     }
@@ -484,10 +450,10 @@ int get_update_status_from_avro_buf(const unsigned char* buf, const size_t bufle
 
 // Processes change table by writing records ready to be sent to iRODS into avro buffer (buffer).
 int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *config_struct_ptr, boost::shared_ptr< std::vector<uint8_t>>& buffer, 
-        change_map_t& change_map, std::multiset<std::string>& active_objectId_list) {
+        change_map_t& change_map, std::multiset<std::string>& active_object_identifier_list) {
 
-    // store up a list of objectId that are being added to this buffer
-    std::multiset<std::string> temp_objectId_list;
+    // store up a list of object_identifier that are being added to this buffer
+    std::multiset<std::string> temp_object_identifier_list;
 
     if (nullptr == config_struct_ptr) {
         LOG(LOG_ERR, "Null config_struct_ptr sent to %s - %d", __FUNCTION__, __LINE__);
@@ -518,7 +484,7 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
     // populate the register map
     for (auto& iter : config_struct_ptr->register_map) {
         file_system_event_aggregator::RegisterMapEntry entry;
-        entry.filePath = iter.first;
+        entry.physical_path = iter.first;
         entry.irodsRegisterPath = iter.second;
         map.registerMap.push_back(entry);
     }
@@ -527,11 +493,11 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
     size_t write_count = change_map_seq.size() >= config_struct_ptr->maximum_records_per_update_to_irods 
         ? config_struct_ptr->maximum_records_per_update_to_irods : change_map_seq.size() ;
 
-    bool collision_in_objectId = false;
+    bool collision_in_object_identifier = false;
     size_t cnt = 0;
     for (auto iter = change_map_seq.begin(); iter != change_map_seq.end() && cnt < write_count;) { 
 
-        LOG(LOG_DBG, "objectId=%s oper_complete=%i", iter->objectId.c_str(), iter->oper_complete);
+        LOG(LOG_DBG, "object_identifier=%s oper_complete=%i", iter->object_identifier.c_str(), iter->oper_complete);
 
         LOG(LOG_DBG, "change_map size = %lu", change_map_seq.size()); 
 
@@ -541,57 +507,61 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
             // For MKDIR, CREATE, and RENAME - break out if there is an active event on the parent.
             // For RMDIR, UNLINK - break out of there is an active event on itself
 
-            if (iter->last_event == file_system_event_aggregator::EventTypeEnum::MKDIR ||
-                    iter->last_event == file_system_event_aggregator::EventTypeEnum::CREATE ||
-                    iter->last_event == file_system_event_aggregator::EventTypeEnum::RENAME) {
+            if (iter->event_type == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                    iter->event_type == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                    iter->event_type == file_system_event_aggregator::EventTypeEnum::RENAME) {
 
-                if (active_objectId_list.find(iter->parent_objectId) != active_objectId_list.end()) {
-                    LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out ", iter->parent_objectId.c_str());
-                    collision_in_objectId = true;
+                if (active_object_identifier_list.find(iter->target_parent_object_identifier) != active_object_identifier_list.end()) {
+                    LOG(LOG_DBG, "object_identifier %s is already in active object_identifier list - breaking out ", iter->target_parent_object_identifier.c_str());
+                    collision_in_object_identifier = true;
                     break;
                 }
 
-            } else if (iter->last_event == file_system_event_aggregator::EventTypeEnum::RMDIR ||
-                    iter->last_event == file_system_event_aggregator::EventTypeEnum::UNLINK) {
+            } else if (iter->event_type == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                    iter->event_type == file_system_event_aggregator::EventTypeEnum::UNLINK) {
 
-                if (active_objectId_list.find(iter->objectId) != active_objectId_list.end()) {
-                    LOG(LOG_DBG, "objectId %s is already in active objectId list - breaking out", iter->objectId.c_str());
-                    collision_in_objectId = true;
+                if (active_object_identifier_list.find(iter->object_identifier) != active_object_identifier_list.end()) {
+                    LOG(LOG_DBG, "object_identifier %s is already in active object_identifier list - breaking out", iter->object_identifier.c_str());
+                    collision_in_object_identifier = true;
                     break;
                 }
             }
 
           
             // if MKDIR, CREATE, or RENAME put self on active list, for RMDIR and UNLINK put parent on active list
-            if (iter->last_event == file_system_event_aggregator::EventTypeEnum::MKDIR ||
-                    iter->last_event == file_system_event_aggregator::EventTypeEnum::CREATE ||
-                    iter->last_event == file_system_event_aggregator::EventTypeEnum::RENAME) {
+            if (iter->event_type == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                    iter->event_type == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                    iter->event_type == file_system_event_aggregator::EventTypeEnum::RENAME) {
 
-                LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Adding SELF %s to active objectId list", iter->objectId.c_str());
-                temp_objectId_list.insert(iter->objectId);
+                LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Adding SELF %s to active object_identifier list", iter->object_identifier.c_str());
+                temp_object_identifier_list.insert(iter->object_identifier);
 
-            } else if (iter->last_event == file_system_event_aggregator::EventTypeEnum::RMDIR ||
-                    iter->last_event == file_system_event_aggregator::EventTypeEnum::UNLINK) {
+            } else if (iter->event_type == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                    iter->event_type == file_system_event_aggregator::EventTypeEnum::UNLINK) {
                 
-                LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Adding PARENT %s to active objectId list", iter->parent_objectId.c_str());
-                temp_objectId_list.insert(iter->parent_objectId);
+                LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Adding PARENT %s to active object_identifier list", iter->target_parent_object_identifier.c_str());
+                temp_object_identifier_list.insert(iter->target_parent_object_identifier);
             }
 
             // populate the change_entry and push it onto the map
             file_system_event_aggregator::ChangeDescriptor change_entry;            
-            change_entry.crIndex = iter->cr_index;
-            change_entry.objectIdentifier = iter->objectId;
-            change_entry.parentObjectIdentifier = iter->parent_objectId;
-            change_entry.objectType = iter->object_type;
-            change_entry.objectName = iter->object_name;
-            change_entry.filePath = iter->physical_path;
-            change_entry.eventType = iter->last_event;
-            change_entry.fileSize= iter->file_size;
+            change_entry.change_record_index = iter->change_record_index;
+            change_entry.object_identifier = iter->object_identifier;
+            change_entry.source_parent_object_identifier = iter->source_parent_object_identifier;
+            change_entry.target_parent_object_identifier = iter->target_parent_object_identifier;
+            change_entry.object_type = iter->object_type;
+            change_entry.object_name = iter->object_name;
+            change_entry.source_physical_path = iter->source_physical_path;
+            change_entry.target_physical_path = iter->target_physical_path;
+            change_entry.event_type = iter->event_type;
+            change_entry.file_size= iter->file_size;
 
 
             // **** debug **** 
-            LOG(LOG_DBG, "Entry: [objectId=%s][parent_objectId=%s][object_name=%s][physical_path=%s][file_size=%d]", change_entry.objectIdentifier.c_str(), 
-                    change_entry.parentObjectIdentifier.c_str(), change_entry.objectName.c_str(), change_entry.filePath.c_str(), change_entry.fileSize);
+            LOG(LOG_DBG, "Entry: [object_identifier=%s][source_parent_object_identifier=%s][target_parent_object_identifier=%s][object_name=%s]"
+                    "[source_physical_path=%s][target_physical_path=%s][file_size=%d]", 
+                    change_entry.object_identifier.c_str(), change_entry.source_parent_object_identifier.c_str(), change_entry.target_parent_object_identifier.c_str(), 
+                    change_entry.object_name.c_str(), change_entry.source_physical_path.c_str(), change_entry.target_physical_path.c_str(), change_entry.file_size);
             // *************
             
             map.entries.push_back(change_entry);
@@ -616,10 +586,10 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
     LOG(LOG_DBG, "message_size=%lu", buffer->size());
 
-    // add all fid strings from temp_objectId to active_objectId_list
-    active_objectId_list.insert(temp_objectId_list.begin(), temp_objectId_list.end());
+    // add all fid strings from temp_object_identifier to active_object_identifier_list
+    active_object_identifier_list.insert(temp_object_identifier_list.begin(), temp_object_identifier_list.end());
 
-    if (collision_in_objectId) {
+    if (collision_in_object_identifier) {
         return irods_filesystem_event_processor_error::COLLISION_IN_FIDSTR;
     }
 
@@ -628,7 +598,7 @@ int write_change_table_to_avro_buf(const filesystem_event_aggregator_cfg_t *conf
 
 // If we get a failure, the accumulator needs to add the entry back to the list.
 int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<uint8_t>>& buffer, change_map_t& change_map, 
-        std::multiset<std::string>& active_objectId_list) {
+        std::multiset<std::string>& active_object_identifier_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -642,14 +612,16 @@ int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<ui
 
         change_descriptor record {};
 
-        record.cr_index = iter->crIndex;
-        record.last_event = iter->eventType;
-        record.objectId = iter->objectIdentifier;
-        record.physical_path = iter->filePath;
-        record.object_name = iter->objectName;
-        record.object_type = iter->objectType;
-        record.parent_objectId = iter->parentObjectIdentifier; 
-        record.file_size = iter->fileSize;;
+        record.change_record_index = iter->change_record_index;
+        record.event_type = iter->event_type;
+        record.object_identifier = iter->object_identifier;
+        record.source_physical_path = iter->source_physical_path;
+        record.target_physical_path = iter->target_physical_path;
+        record.object_name = iter->object_name;
+        record.object_type = iter->object_type;
+        record.source_parent_object_identifier = iter->source_parent_object_identifier; 
+        record.target_parent_object_identifier = iter->target_parent_object_identifier; 
+        record.file_size = iter->file_size;;
         record.oper_complete = true;
         record.timestamp = time(NULL);
    
@@ -658,33 +630,33 @@ int add_avro_buffer_back_to_change_table(const boost::shared_ptr< std::vector<ui
         change_map.insert(record);
 
         // update active object id list
-        if (iter->eventType == file_system_event_aggregator::EventTypeEnum::MKDIR ||
-                iter->eventType == file_system_event_aggregator::EventTypeEnum::CREATE ||
-                iter->eventType == file_system_event_aggregator::EventTypeEnum::RENAME) {
+        if (iter->event_type == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                iter->event_type == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                iter->event_type == file_system_event_aggregator::EventTypeEnum::RENAME) {
 
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of SELF %s from active_objectId_list", iter->objectIdentifier.c_str());
-            auto itr = active_objectId_list.find(iter->objectIdentifier);
-            if(itr != active_objectId_list.end()){
-                active_objectId_list.erase(itr);
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of SELF %s from active_object_identifier_list", iter->object_identifier.c_str());
+            auto itr = active_object_identifier_list.find(iter->object_identifier);
+            if(itr != active_object_identifier_list.end()){
+                active_object_identifier_list.erase(itr);
             }
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_object_identifier_list size = %lu", active_object_identifier_list.size());
 
-        } else if (iter->eventType == file_system_event_aggregator::EventTypeEnum::RMDIR ||
-                iter->eventType == file_system_event_aggregator::EventTypeEnum::UNLINK ) {
+        } else if (iter->event_type == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                iter->event_type == file_system_event_aggregator::EventTypeEnum::UNLINK ) {
 
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of PARENT %s from active_objectId_list", iter->parentObjectIdentifier.c_str());
-            auto itr = active_objectId_list.find(iter->parentObjectIdentifier);
-            if(itr != active_objectId_list.end()){
-                active_objectId_list.erase(itr);
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of PARENT %s from active_object_identifier_list", iter->target_parent_object_identifier.c_str());
+            auto itr = active_object_identifier_list.find(iter->target_parent_object_identifier);
+            if(itr != active_object_identifier_list.end()){
+                active_object_identifier_list.erase(itr);
             }
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_object_identifier_list size = %lu", active_object_identifier_list.size());
         }
     }
 
     return irods_filesystem_event_processor_error::SUCCESS;
 }   
 
-void remove_objectIds_in_avro_buffer_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::multiset<std::string>& active_objectId_list) {
+void remove_object_identifiers_in_avro_buffer_from_active_list(const boost::shared_ptr< std::vector<uint8_t>>& buffer, std::multiset<std::string>& active_object_identifier_list) {
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
@@ -696,26 +668,26 @@ void remove_objectIds_in_avro_buffer_from_active_list(const boost::shared_ptr< s
 
     for (auto entry : map.entries) {
 
-        if (entry.eventType == file_system_event_aggregator::EventTypeEnum::MKDIR ||
-                entry.eventType == file_system_event_aggregator::EventTypeEnum::CREATE ||
-                entry.eventType == file_system_event_aggregator::EventTypeEnum::RENAME) {
+        if (entry.event_type == file_system_event_aggregator::EventTypeEnum::MKDIR ||
+                entry.event_type == file_system_event_aggregator::EventTypeEnum::CREATE ||
+                entry.event_type == file_system_event_aggregator::EventTypeEnum::RENAME) {
 
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of SELF %s from active_objectId_list", entry.objectIdentifier.c_str());
-            auto itr = active_objectId_list.find(entry.objectIdentifier);
-            if(itr != active_objectId_list.end()){
-                active_objectId_list.erase(itr);
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of SELF %s from active_object_identifier_list", entry.object_identifier.c_str());
+            auto itr = active_object_identifier_list.find(entry.object_identifier);
+            if(itr != active_object_identifier_list.end()){
+                active_object_identifier_list.erase(itr);
             }
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_object_identifier_list size = %lu", active_object_identifier_list.size());
 
-        } else if (entry.eventType == file_system_event_aggregator::EventTypeEnum::RMDIR ||
-                entry.eventType == file_system_event_aggregator::EventTypeEnum::UNLINK ) {
+        } else if (entry.event_type == file_system_event_aggregator::EventTypeEnum::RMDIR ||
+                entry.event_type == file_system_event_aggregator::EventTypeEnum::UNLINK ) {
 
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of PARENT %s from active_objectId_list", entry.parentObjectIdentifier.c_str());
-            auto itr = active_objectId_list.find(entry.parentObjectIdentifier);
-            if(itr != active_objectId_list.end()){
-                active_objectId_list.erase(itr);
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: Removing one copy of PARENT %s from active_object_identifier_list", entry.target_parent_object_identifier.c_str());
+            auto itr = active_object_identifier_list.find(entry.target_parent_object_identifier);
+            if(itr != active_object_identifier_list.end()){
+                active_object_identifier_list.erase(itr);
             }
-            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_objectId_list size = %lu", active_objectId_list.size());
+            LOG(LOG_DBG, "ACTIVE_OBJECTID_LIST: active_object_identifier_list size = %lu", active_object_identifier_list.size());
 
         }
     }
@@ -793,8 +765,8 @@ bool entries_ready_to_process(change_map_t& change_map) {
     // get change map indexed on oper_complete 
     auto &change_map_oper_complete = change_map.get<change_descriptor_oper_complete_idx>();
     bool ready = change_map_oper_complete.count(true) > 0;
-    LOG(LOG_DBG, "change map size = %lu", change_map.size());
-    LOG(LOG_DBG, "entries_ready_to_process = %i", ready);
+    LOG(LOG_TRACE, "change map size = %lu", change_map.size());
+    LOG(LOG_TRACE, "entries_ready_to_process = %i", ready);
     return ready; 
 }
 
@@ -821,24 +793,26 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
 
         // don't serialize the event that adds the fid to the root directory as this gets generated 
         // every time on restart
-        if (iter->last_event == file_system_event_aggregator::EventTypeEnum::WRITE_FID) {
+        if (iter->event_type == file_system_event_aggregator::EventTypeEnum::WRITE_FID) {
             continue;
         }
 
         sqlite3_stmt *stmt;     
-        sqlite3_prepare_v2(db, "insert into change_map (objectId, parent_objectId, object_name, physical_path, last_event, "
-                               "timestamp, oper_complete, object_type, file_size, cr_index) values (?1, ?2, ?3, ?4, "
-                               "?5, ?6, ?7, ?8, ?9, ?10);", -1, &stmt, NULL);       
-        sqlite3_bind_text(stmt, 1, iter->objectId.c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_text(stmt, 2, iter->parent_objectId.c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_text(stmt, 3, iter->object_name.c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_text(stmt, 4, iter->physical_path.c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_text(stmt, 5, event_type_to_str(iter->last_event).c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_int(stmt, 6, iter->timestamp); 
-        sqlite3_bind_int(stmt, 7, iter->oper_complete ? 1 : 0);
-        sqlite3_bind_text(stmt, 8, object_type_to_str(iter->object_type).c_str(), -1, SQLITE_STATIC); 
-        sqlite3_bind_int(stmt, 9, iter->file_size); 
-        sqlite3_bind_int(stmt, 10, iter->cr_index); 
+        sqlite3_prepare_v2(db, "insert into change_map (object_identifier, source_parent_object_identifier, target_parent_object_identifier, object_name, source_physical_path, "
+                               "target_physical_path, event_type, timestamp, oper_complete, object_type, file_size, change_record_index) "
+                               "values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);", -1, &stmt, NULL);       
+        sqlite3_bind_text(stmt, 1, iter->object_identifier.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 2, iter->source_parent_object_identifier.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 3, iter->target_parent_object_identifier.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 4, iter->object_name.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 5, iter->source_physical_path.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 6, iter->target_physical_path.c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_text(stmt, 7, event_type_to_str(iter->event_type).c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_int(stmt, 8, iter->timestamp); 
+        sqlite3_bind_int(stmt, 9, iter->oper_complete ? 1 : 0);
+        sqlite3_bind_text(stmt, 10, object_type_to_str(iter->object_type).c_str(), -1, SQLITE_STATIC); 
+        sqlite3_bind_int(stmt, 11, iter->file_size); 
+        sqlite3_bind_int(stmt, 12, iter->change_record_index); 
 
         rc = sqlite3_step(stmt); 
         if (SQLITE_DONE != rc) {
@@ -859,30 +833,34 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
         LOG(LOG_ERR, "Invalid nullptr sent to change_map in %s", __FUNCTION__);
     }
 
-    if (10 != argc) {
+    if (12 != argc) {
         LOG(LOG_ERR, "Invalid number of columns returned from change_map query in database.");
         return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
     change_map_t *change_map = static_cast<change_map_t*>(change_map_void_ptr);
+//    rc = sqlite3_exec(db, "select object_identifier, source_parent_object_identifier, target_parent_object_identifier, object_name, object_type, source_physical_path, target_physical_path, oper_complete, "
+//                          "timestamp, event_type, file_size, change_record_index from change_map", query_callback_change_map, &change_map, &zErrMsg);
 
     change_descriptor entry{};
-    entry.objectId = argv[0];
-    entry.parent_objectId = argv[1];
-    entry.object_name = argv[2];
-    entry.object_type = str_to_object_type(argv[3]);
-    entry.physical_path = argv[4]; 
+    entry.object_identifier = argv[0];
+    entry.source_parent_object_identifier = argv[1];
+    entry.target_parent_object_identifier = argv[2];
+    entry.object_name = argv[3];
+    entry.object_type = str_to_object_type(argv[4]);
+    entry.source_physical_path = argv[5]; 
+    entry.target_physical_path = argv[6]; 
 
     int oper_complete;
     int timestamp;
     int file_size;
-    unsigned long long cr_index;
+    unsigned long long change_record_index;
 
     try {
-        oper_complete = boost::lexical_cast<int>(argv[5]);
-        timestamp = boost::lexical_cast<time_t>(argv[6]);
-        file_size = boost::lexical_cast<off_t>(argv[8]);
-        cr_index = boost::lexical_cast<unsigned long long>(argv[9]);
+        oper_complete = boost::lexical_cast<int>(argv[7]);
+        timestamp = boost::lexical_cast<time_t>(argv[8]);
+        file_size = boost::lexical_cast<off_t>(argv[10]);
+        change_record_index = boost::lexical_cast<unsigned long long>(argv[11]);
     } catch( boost::bad_lexical_cast const& ) {
         LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.");
         return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
@@ -890,9 +868,9 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
 
     entry.oper_complete = (oper_complete == 1);
     entry.timestamp = timestamp;
-    entry.last_event = str_to_event_type(argv[7]);
+    entry.event_type = str_to_event_type(argv[9]);
     entry.file_size = file_size;
-    entry.cr_index = cr_index;
+    entry.change_record_index = change_record_index;
 
     std::lock_guard<std::mutex> lock(change_table_mutex);
     change_map->insert(entry);
@@ -900,24 +878,24 @@ static int query_callback_change_map(void *change_map_void_ptr, int argc, char**
     return irods_filesystem_event_processor_error::SUCCESS;
 }
 
-static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** argv, char** columnNames) {
+static int query_callback_change_record_index(void *change_record_index_void_ptr, int argc, char** argv, char** columnNames) {
 
-    if (nullptr == cr_index_void_ptr) {
-        LOG(LOG_ERR, "Invalid nullptr sent to cr_index_ptr in %s", __FUNCTION__);
+    if (nullptr == change_record_index_void_ptr) {
+        LOG(LOG_ERR, "Invalid nullptr sent to change_record_index_ptr in %s", __FUNCTION__);
     }
 
     if (1 != argc) {
-        LOG(LOG_ERR, "Invalid number of columns returned from cr_index query in database.");
+        LOG(LOG_ERR, "Invalid number of columns returned from change_record_index query in database.");
         return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
-    unsigned long long *cr_index_ptr = static_cast<unsigned long long*>(cr_index_void_ptr);
+    unsigned long long *change_record_index_ptr = static_cast<unsigned long long*>(change_record_index_void_ptr);
 
-    *cr_index_ptr = 0;
+    *change_record_index_ptr = 0;
 
     if (nullptr != argv[0]) {
         try {
-            *cr_index_ptr = boost::lexical_cast<unsigned long long>(argv[0]);
+            *change_record_index_ptr = boost::lexical_cast<unsigned long long>(argv[0]);
         } catch( boost::bad_lexical_cast const& ) {
             LOG(LOG_ERR, "Could not convert the string to int returned from change_map query in database.");
             return  irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
@@ -927,7 +905,7 @@ static int query_callback_cr_index(void *cr_index_void_ptr, int argc, char** arg
     return irods_filesystem_event_processor_error::SUCCESS;
 }
 
-int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_file) {
+int write_change_record_index_to_sqlite(unsigned long long change_record_index, const std::string& db_file) {
 
     sqlite3 *db;
     int rc;
@@ -942,8 +920,8 @@ int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_
 
 
     sqlite3_stmt *stmt;     
-    sqlite3_prepare_v2(db, "insert into last_cr_index (cr_index) values (?1);", -1, &stmt, NULL);       
-    sqlite3_bind_int(stmt, 1, cr_index); 
+    sqlite3_prepare_v2(db, "insert into last_change_record_index (change_record_index) values (?1);", -1, &stmt, NULL);       
+    sqlite3_bind_int(stmt, 1, change_record_index); 
 
     rc = sqlite3_step(stmt); 
 
@@ -958,7 +936,7 @@ int write_cr_index_to_sqlite(unsigned long long cr_index, const std::string& db_
 }
 
 
-int get_cr_index(unsigned long long& cr_index, const std::string& db_file) {
+int get_change_record_index(unsigned long long& change_record_index, const std::string& db_file) {
 
     sqlite3 *db;
     char *zErrMsg = 0;
@@ -972,7 +950,7 @@ int get_cr_index(unsigned long long& cr_index, const std::string& db_file) {
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
-    rc = sqlite3_exec(db, "select max(cr_index) from last_cr_index", query_callback_cr_index, &cr_index, &zErrMsg);
+    rc = sqlite3_exec(db, "select max(change_record_index) from last_change_record_index", query_callback_change_record_index, &change_record_index, &zErrMsg);
 
     if (rc) {
         LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s", zErrMsg);
@@ -1000,8 +978,8 @@ int deserialize_change_map_from_sqlite(change_map_t& change_map, const std::stri
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
-    rc = sqlite3_exec(db, "select objectId, parent_objectId, object_name, object_type, physical_path, oper_complete, "
-                          "timestamp, last_event, file_size, cr_index from change_map", query_callback_change_map, &change_map, &zErrMsg);
+    rc = sqlite3_exec(db, "select object_identifier, source_parent_object_identifier, target_parent_object_identifier, object_name, object_type, source_physical_path, target_physical_path, oper_complete, "
+                          "timestamp, event_type, file_size, change_record_index from change_map", query_callback_change_map, &change_map, &zErrMsg);
 
     if (rc) {
         LOG(LOG_ERR, "Error querying change_map from db during de-serialization: %s", zErrMsg);
@@ -1030,20 +1008,22 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
     int rc;
 
     const char *create_table_str = "create table if not exists change_map ("
-       "objectId char(256) primary key, "
-       "cr_index integer, "
-       "parent_objectId char(256), "
+       "object_identifier char(256) primary key, "
+       "change_record_index integer, "
+       "source_parent_object_identifier char(256), "
+       "target_parent_object_identifier char(256), "
        "object_name char(256), "
-       "physical_path char(256), "
-       "last_event char(256), "
+       "source_physical_path char(256), "
+       "target_physical_path char(256), "
+       "event_type char(256), "
        "timestamp integer, "
        "oper_complete integer, "
        "object_type char(256), "
        "file_size integer)";
 
-    // note:  storing cr_index as string because integer in sqlite is max of signed 64 bits
-    const char *create_last_cr_index_table = "create table if not exists last_cr_index ("
-       "cr_index integer primary key)";
+    // note:  storing change_record_index as string because integer in sqlite is max of signed 64 bits
+    const char *create_last_change_record_index_table = "create table if not exists last_change_record_index ("
+       "change_record_index integer primary key)";
 
     std::string serialize_file = db_file + ".db";
     rc = sqlite3_open(serialize_file.c_str(), &db);
@@ -1061,10 +1041,10 @@ int initiate_change_map_serialization_database(const std::string& db_file) {
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }
 
-    rc = sqlite3_exec(db, create_last_cr_index_table,  NULL, NULL, &zErrMsg);
+    rc = sqlite3_exec(db, create_last_change_record_index_table,  NULL, NULL, &zErrMsg);
     
     if (rc) {
-        LOG(LOG_ERR, "Error creating last_cr_index table: %s", zErrMsg);
+        LOG(LOG_ERR, "Error creating last_change_record_index table: %s", zErrMsg);
         sqlite3_close(db);
         return irods_filesystem_event_processor_error::SQLITE_DB_ERROR;
     }

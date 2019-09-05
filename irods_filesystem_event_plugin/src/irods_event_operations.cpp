@@ -56,33 +56,33 @@
 extern const char *cllBindVars[MAX_BIND_VARS];
 extern int cllBindVarCount;
 
-const std::string objectIdentifier_avu_key = "object_identifier";
+const std::string object_identifier_avu_key = "object_identifier";
 
 const std::string update_data_size_sql = "update R_DATA_MAIN set data_size = ? where data_id = (select * from ("
                    "select R_DATA_MAIN.data_id "
                    "from R_DATA_MAIN "
                    "inner join R_OBJT_METAMAP on R_DATA_MAIN.data_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
 
 const std::string update_data_object_for_rename_sql = "update R_DATA_MAIN set data_name = ?, data_path = ?, coll_id = (select * from ("
                    "select R_COLL_MAIN.coll_id "
                    "from R_COLL_MAIN "
                    "inner join R_OBJT_METAMAP on R_COLL_MAIN.coll_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)"
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)"
                    "where data_id = (select * from ("
                    "select R_DATA_MAIN.data_id "
                    "from R_DATA_MAIN "
                    "inner join R_OBJT_METAMAP on R_DATA_MAIN.data_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table2)";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table2)";
 
-const std::string get_collection_path_from_objectIdentifier_sql = "select R_COLL_MAIN.coll_name "
+const std::string get_collection_path_from_object_identifier_sql = "select R_COLL_MAIN.coll_name "
                    "from R_COLL_MAIN "
                    "inner join R_OBJT_METAMAP on R_COLL_MAIN.coll_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?";
 
 
 const std::string update_collection_for_rename_sql = "update R_COLL_MAIN set coll_name = ?, parent_coll_name = ? "
@@ -91,28 +91,28 @@ const std::string update_collection_for_rename_sql = "update R_COLL_MAIN set col
                    "from R_COLL_MAIN "
                    "inner join R_OBJT_METAMAP on R_COLL_MAIN.coll_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
 
 const std::string remove_object_meta_sql = "delete from R_OBJT_METAMAP where object_id = (select * from ("
                    "select R_OBJT_METAMAP.object_id "
                    "from R_OBJT_METAMAP "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
 
 const std::string unlink_sql = "delete from R_DATA_MAIN where data_id = (select * from ("
                    "select R_DATA_MAIN.data_id "
                    "from R_DATA_MAIN "
                    "inner join R_OBJT_METAMAP on R_DATA_MAIN.data_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?)temp_table)";
 
 const std::string rmdir_sql = "delete from R_COLL_MAIN where COLL_NAME = ?";
 
-const std::string get_collection_id_from_objectIdentifier_sql = "select R_COLL_MAIN.coll_id "
+const std::string get_collection_id_from_object_identifier_sql = "select R_COLL_MAIN.coll_id "
                    "from R_COLL_MAIN "
                    "inner join R_OBJT_METAMAP on R_COLL_MAIN.coll_id = R_OBJT_METAMAP.object_id "
                    "inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                   "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?";
+                   "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value = ?";
 
 
 const std::string insert_data_obj_sql = "insert into R_DATA_MAIN (data_id, coll_id, data_name, data_repl_num, data_type_name, "
@@ -238,7 +238,7 @@ int irods_path_to_physical_path(const std::string& irods_path, const std::vector
 }
 
 
-int get_user_id(rsComm_t* _comm, icatSessionStruct *icss, rodsLong_t& user_id, bool direct_db_access_flag) {
+int get_user_id(rsComm_t* _comm, icatSessionStruct *icss, rodsLong_t& user_id, bool direct_db_access) {
 
     std::vector<std::string> bindVars;
     bindVars.push_back(_comm->clientUser.userName);
@@ -250,24 +250,21 @@ int get_user_id(rsComm_t* _comm, icatSessionStruct *icss, rodsLong_t& user_id, b
     return 0;
 }
 
-void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
-
+void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
   
     std::string irods_path; 
-    if (physical_path_to_irods_path(physical_path.c_str(), register_map, irods_path) < 0) {
+    if (physical_path_to_irods_path(cd.target_physical_path.c_str(), register_map, irods_path) < 0) {
         rodsLog(LOG_NOTICE, "Skipping entry because physical_path [%s] is not in register_map.",
-                   physical_path.c_str()); 
+                   cd.target_physical_path.c_str()); 
         return;
     }
 
 
-    if (direct_db_access_flag) { 
+    if (direct_db_access) { 
 
         // register object
        
@@ -280,34 +277,34 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         std::string username = _comm->clientUser.userName;
         std::string zone = _comm->clientUser.rodsZone;
         rodsLog(LOG_NOTICE, "seq_no=%i username=%s zone=%s", seq_no, username.c_str(), zone.c_str());
-        rodsLog(LOG_NOTICE, "object_name = %s", object_name.c_str());
+        rodsLog(LOG_NOTICE, "object_name = %s", cd.object_name.c_str());
 
         //boost::filesystem::path p(irods_path);
 
-        // get collection id from parent objectIdentifier
+        // get collection id from parent object_identifier
         rodsLong_t coll_id;
         std::vector<std::string> bindVars;
-        bindVars.push_back(parent_objectIdentifier);
-        status = cmlGetIntegerValueFromSql(get_collection_id_from_objectIdentifier_sql.c_str(), &coll_id, bindVars, icss );
+        bindVars.push_back(cd.target_parent_object_identifier);
+        status = cmlGetIntegerValueFromSql(get_collection_id_from_object_identifier_sql.c_str(), &coll_id, bindVars, icss);
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error during registration object %s.  Error getting collection id for collection with objectIdentifier=%s.  Error is %i", 
-                    objectIdentifier.c_str(), parent_objectIdentifier.c_str(),  status);
+            rodsLog(LOG_ERROR, "Error during registration object %s.  Error getting collection id for collection with object_identifier=%s.  Error is %i", 
+                    cd.object_identifier.c_str(), cd.target_parent_object_identifier.c_str(),  status);
             return;
         }
 
         // insert data object
         cllBindVars[0] = std::to_string(seq_no).c_str();
         cllBindVars[1] = std::to_string(coll_id).c_str();
-        cllBindVars[2] = object_name.c_str();
-        cllBindVars[3] = std::to_string(file_size).c_str();  
-        cllBindVars[4] = physical_path.c_str(); 
+        cllBindVars[2] = cd.object_name.c_str();
+        cllBindVars[3] = std::to_string(cd.file_size).c_str();  
+        cllBindVars[4] = cd.target_physical_path.c_str(); 
         cllBindVars[5] = _comm->clientUser.userName;
         cllBindVars[6] = _comm->clientUser.rodsZone;
         cllBindVars[7] = std::to_string(resource_id).c_str(); 
         cllBindVarCount = 8;
         status = cmlExecuteNoAnswerSql(insert_data_obj_sql.c_str(), icss);
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error registering object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error registering object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -315,7 +312,7 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
 #if !defined(COCKROACHDB_ICAT)
         status =  cmlExecuteNoAnswerSql("commit", icss);
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing insertion of new data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing insertion of new data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         } 
 #endif
@@ -326,14 +323,14 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         cllBindVarCount = 2;
         status = cmlExecuteNoAnswerSql(insert_user_ownership_data_object_sql.c_str(), icss);
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error adding onwership to object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error adding onwership to object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
 #if !defined(COCKROACHDB_ICAT)
         status =  cmlExecuteNoAnswerSql("commit", icss);
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing ownership of new data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing ownership of new data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 #endif
@@ -341,11 +338,11 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         // add object identiier metadata
         keyValPair_t reg_param;
         memset(&reg_param, 0, sizeof(reg_param));
-        addKeyVal(&reg_param, objectIdentifier_avu_key.c_str(), objectIdentifier.c_str());
-        status = chlAddAVUMetadata(_comm, 0, "-d", irods_path.c_str(), objectIdentifier_avu_key.c_str(), objectIdentifier.c_str(), "");
+        addKeyVal(&reg_param, object_identifier_avu_key.c_str(), cd.object_identifier.c_str());
+        status = chlAddAVUMetadata(_comm, 0, "-d", irods_path.c_str(), object_identifier_avu_key.c_str(), cd.object_identifier.c_str(), "");
         rodsLog(LOG_NOTICE, "Return value from chlAddAVUMetdata = %i", status);
         if (status < 0) {
-            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", objectIdentifier_avu_key.c_str(), objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", object_identifier_avu_key.c_str(), cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -354,14 +351,14 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         dataObjInp_t dataObjInp;
         memset(&dataObjInp, 0, sizeof(dataObjInp));
         strncpy(dataObjInp.objPath, irods_path.c_str(), MAX_NAME_LEN);
-        addKeyVal(&dataObjInp.condInput, FILE_PATH_KW, physical_path.c_str());
+        addKeyVal(&dataObjInp.condInput, FILE_PATH_KW, cd.target_physical_path.c_str());
         addKeyVal(&dataObjInp.condInput, RESC_NAME_KW, resource_name.c_str());
         addKeyVal(&dataObjInp.condInput, RESC_HIER_STR_KW, resource_name.c_str());
 
         status = rsPhyPathReg(_comm, &dataObjInp);
         //status = filePathReg(_comm, &dataObjInp, resource_name.c_str());
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error registering object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error registering object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -373,11 +370,11 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
         modAVUMetadataInp.arg0 = "add";
         modAVUMetadataInp.arg1 = "-d";
         modAVUMetadataInp.arg2 = const_cast<char*>(irods_path.c_str());
-        modAVUMetadataInp.arg3 = const_cast<char*>(objectIdentifier_avu_key.c_str());
-        modAVUMetadataInp.arg4 = const_cast<char*>(objectIdentifier.c_str());
+        modAVUMetadataInp.arg3 = const_cast<char*>(object_identifier_avu_key.c_str());
+        modAVUMetadataInp.arg4 = const_cast<char*>(cd.object_identifier.c_str());
         status = rsModAVUMetadata(_comm, &modAVUMetadataInp);
         if (status < 0) {
-            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", objectIdentifier_avu_key.c_str(), objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", object_identifier_avu_key.c_str(), cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -386,12 +383,12 @@ void handle_create(const std::vector<std::pair<std::string, std::string> >& regi
 }
 
 void handle_batch_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id,
-        const std::string& resource_name, const std::vector<std::string>& objectIdentifier_list, const std::vector<std::string>& physical_path_list,
-        const std::vector<std::string>& object_name_list, const std::vector<std::string>& parent_objectIdentifier_list,
+        const std::string& resource_name, const std::vector<std::string>& object_identifier_list, const std::vector<std::string>& physical_path_list,
+        const std::vector<std::string>& object_name_list, const std::vector<std::string>& target_parent_object_identifier_list,
         const std::vector<int64_t>& file_size_list, const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss, 
         const rodsLong_t& user_id, bool set_metadata_for_storage_tiering_time_violation, const std::string& metadata_key_for_storage_tiering_time_violation) {
 
-    size_t insert_count = objectIdentifier_list.size();
+    size_t insert_count = object_identifier_list.size();
     int status;
 
     if (insert_count == 0) {
@@ -399,7 +396,7 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
     }
 
     if (physical_path_list.size() != insert_count || object_name_list.size() != insert_count ||
-            parent_objectIdentifier_list.size() != insert_count || file_size_list.size() != insert_count) {
+            target_parent_object_identifier_list.size() != insert_count || file_size_list.size() != insert_count) {
 
         rodsLog(LOG_ERROR, "Handle batch create.  Received lists of differing size");
         return;
@@ -422,28 +419,28 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
                              "data_size, resc_name, data_path, data_owner_name, data_owner_zone, data_is_dirty, data_map_id, resc_id) "
                         "values ";
 
-    // cache the collection id's from parent_objectIdentifier
-    std::map<std::string, rodsLong_t> objectIdentifier_to_collection_id_map;
+    // cache the collection id's from cd.target_parent_object_identifier
+    std::map<std::string, rodsLong_t> object_identifier_to_collection_id_map;
 
     for (size_t i = 0; i < insert_count; ++i) {
 
         rodsLong_t coll_id;
 
-        auto iter = objectIdentifier_to_collection_id_map.find(parent_objectIdentifier_list[i]);
+        auto iter = object_identifier_to_collection_id_map.find(target_parent_object_identifier_list[i]);
 
-        if (iter != objectIdentifier_to_collection_id_map.end()) {
+        if (iter != object_identifier_to_collection_id_map.end()) {
             coll_id = iter->second;
         } else {
             std::vector<std::string> bindVars;
-            bindVars.push_back(parent_objectIdentifier_list[i]);
-            status = cmlGetIntegerValueFromSql(get_collection_id_from_objectIdentifier_sql.c_str(), &coll_id, bindVars, icss );
+            bindVars.push_back(target_parent_object_identifier_list[i]);
+            status = cmlGetIntegerValueFromSql(get_collection_id_from_object_identifier_sql.c_str(), &coll_id, bindVars, icss );
             if (status != 0) {
-                rodsLog(LOG_ERROR, "Error during registration object %s.  Error getting collection id for collection with objectIdentifier=%s.  Error is %i", 
-                        objectIdentifier_list[i].c_str(), parent_objectIdentifier_list[i].c_str(), status);
+                rodsLog(LOG_ERROR, "Error during registration object %s.  Error getting collection id for collection with object_identifier=%s.  Error is %i", 
+                        object_identifier_list[i].c_str(), target_parent_object_identifier_list[i].c_str(), status);
                 continue;
             }
 
-            objectIdentifier_to_collection_id_map[parent_objectIdentifier_list[i]] = coll_id;
+            object_identifier_to_collection_id_map[target_parent_object_identifier_list[i]] = coll_id;
         }
 
         insert_sql += "(" + std::to_string(data_obj_sequences[i]) + ", " + std::to_string(coll_id) + ", '" + object_name_list[i] + "', " +
@@ -475,8 +472,8 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
     insert_sql = "insert into R_META_MAIN (meta_id, meta_attr_name, meta_attr_value) values ";
 
     for (size_t i = 0; i < insert_count; ++i) {
-        insert_sql += "(" + std::to_string(metadata_sequences[i]) + ", '" + objectIdentifier_avu_key + "', '" + 
-            objectIdentifier_list[i] + "')";
+        insert_sql += "(" + std::to_string(metadata_sequences[i]) + ", '" + object_identifier_avu_key + "', '" + 
+            object_identifier_list[i] + "')";
 
         if (i < insert_count - 1) {
             insert_sql += ", ";
@@ -615,24 +612,20 @@ void handle_batch_create(const std::vector<std::pair<std::string, std::string> >
 #endif
 }
 
-
-void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
-
+void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
 
     std::string irods_path;
-    if (physical_path_to_irods_path(physical_path, register_map, irods_path) < 0) {
+    if (physical_path_to_irods_path(cd.target_physical_path, register_map, irods_path) < 0) {
         rodsLog(LOG_NOTICE, "Skipping mkdir on physical_path [%s] which is not in register_map.",
-               physical_path.c_str());
+               cd.target_physical_path.c_str());
         return;
     }
 
-    if (direct_db_access_flag) { 
+    if (direct_db_access) { 
 
         collInfo_t coll_info;
         memset(&coll_info, 0, sizeof(coll_info));
@@ -644,18 +637,18 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
 
         // if collection already exists (-809000), do not consider it an error
         if (0 > status && -809000 != status) {
-            rodsLog(LOG_ERROR, "Error registering collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error registering collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         } 
 
         // add object identifier metadata
         keyValPair_t reg_param;
         memset(&reg_param, 0, sizeof(reg_param));
-        addKeyVal(&reg_param, objectIdentifier_avu_key.c_str(), objectIdentifier.c_str());
-        status = chlAddAVUMetadata(_comm, 0, "-C", irods_path.c_str(), objectIdentifier_avu_key.c_str(), objectIdentifier.c_str(), "");
+        addKeyVal(&reg_param, object_identifier_avu_key.c_str(), cd.object_identifier.c_str());
+        status = chlAddAVUMetadata(_comm, 0, "-C", irods_path.c_str(), object_identifier_avu_key.c_str(), cd.object_identifier.c_str(), "");
         rodsLog(LOG_NOTICE, "Return value from chlAddAVUMetadata = %i", status);
         if (status < 0) {
-            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", objectIdentifier_avu_key.c_str(), objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", object_identifier_avu_key.c_str(), cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -671,7 +664,7 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
 
         // if collection already exists (-809000), do not consider it an error
         if (0 > status && -809000 != status) {
-            rodsLog(LOG_ERROR, "Error registering collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error registering collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         } 
 
@@ -681,11 +674,11 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
         modAVUMetadataInp.arg0 = "add";
         modAVUMetadataInp.arg1 = "-C";
         modAVUMetadataInp.arg2 = const_cast<char*>(irods_path.c_str());
-        modAVUMetadataInp.arg3 = const_cast<char*>(objectIdentifier_avu_key.c_str());
-        modAVUMetadataInp.arg4 = const_cast<char*>(objectIdentifier.c_str());
+        modAVUMetadataInp.arg3 = const_cast<char*>(object_identifier_avu_key.c_str());
+        modAVUMetadataInp.arg4 = const_cast<char*>(cd.object_identifier.c_str());
         status = rsModAVUMetadata(_comm, &modAVUMetadataInp);
         if (status < 0) {
-            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", objectIdentifier_avu_key.c_str(), objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error adding %s metadata to object %s.  Error is %i", object_identifier_avu_key.c_str(), cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -694,24 +687,22 @@ void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& regis
 
 }
 
-void handle_other(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
+void handle_other(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
 
-    if (direct_db_access_flag) { 
+    if (direct_db_access) { 
 
         // read and update the file size
-        cllBindVars[0] = std::to_string(file_size).c_str(); //file_size_str.c_str();
-        cllBindVars[1] = objectIdentifier.c_str(); 
+        cllBindVars[0] = std::to_string(cd.file_size).c_str(); 
+        cllBindVars[1] = cd.object_identifier.c_str(); 
         cllBindVarCount = 2;
         status = cmlExecuteNoAnswerSql(update_data_size_sql.c_str(), icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error updating data_object_size for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data_object_size for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             cmlExecuteNoAnswerSql("rollback", icss);
             return;
         }
@@ -720,7 +711,7 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
         status =  cmlExecuteNoAnswerSql("commit", icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing update to data_object_size for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing update to data_object_size for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         } 
 #endif
@@ -729,8 +720,8 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
 
         std::string irods_path;
        
-        // look up object based on objectIdentifier
-        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", false, irods_path); 
+        // look up object based on object_identifier
+        status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.object_identifier, "", false, irods_path); 
 
         // modify the file size
         modDataObjMeta_t modDataObjMetaInp;
@@ -741,20 +732,20 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
         keyValPair_t reg_param;
         memset( &reg_param, 0, sizeof( reg_param ) );
         char tmpStr[MAX_NAME_LEN];
-        snprintf( tmpStr, sizeof( tmpStr ), "%ji", ( intmax_t ) file_size );
+        snprintf( tmpStr, sizeof( tmpStr ), "%ji", ( intmax_t ) cd.file_size );
         addKeyVal( &reg_param, DATA_SIZE_KW, tmpStr );
         modDataObjMetaInp.regParam = &reg_param;
 
 
         modDataObjMetaInp.dataObjInfo = &dataObjInfo;
-        dataObjInfo.dataSize = file_size; 
-        strncpy(dataObjInfo.filePath, physical_path.c_str(), MAX_NAME_LEN);
+        dataObjInfo.dataSize = cd.file_size; 
+        strncpy(dataObjInfo.filePath, cd.target_physical_path.c_str(), MAX_NAME_LEN);
         strncpy(dataObjInfo.objPath, irods_path.c_str(), MAX_NAME_LEN);
 
         status = rsModDataObjMeta( _comm, &modDataObjMetaInp );
 
         if ( status < 0 ) {
-            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -762,26 +753,24 @@ void handle_other(const std::vector<std::pair<std::string, std::string> >& regis
 
 }
 
-void handle_rename_file(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
+void handle_rename_file(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
 
-    if (direct_db_access_flag) { 
+    if (direct_db_access) { 
 
         // update data_name, data_path, and coll_id
-        cllBindVars[0] = object_name.c_str();
-        cllBindVars[1] = physical_path.c_str();
-        cllBindVars[2] = parent_objectIdentifier.c_str();
-        cllBindVars[3] = objectIdentifier.c_str();
+        cllBindVars[0] = cd.object_name.c_str();
+        cllBindVars[1] = cd.target_physical_path.c_str();
+        cllBindVars[2] = cd.target_parent_object_identifier.c_str();
+        cllBindVars[3] = cd.object_identifier.c_str();
         cllBindVarCount = 4;
         status = cmlExecuteNoAnswerSql(update_data_object_for_rename_sql.c_str(), icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             cmlExecuteNoAnswerSql("rollback", icss);
             return;
         }
@@ -790,7 +779,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
         status =  cmlExecuteNoAnswerSql("commit", icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing update to data object rename for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing update to data object rename for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 #endif
@@ -799,21 +788,21 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
         std::string old_irods_path;
         std::string new_parent_irods_path;
 
-        // look up object based on objectIdentifier
-        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", false, old_irods_path); 
+        // look up object based on object_identifier
+        status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.object_identifier, "", false, old_irods_path); 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by objectIdentifier.", objectIdentifier.c_str());
+            rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by object_identifier.", cd.object_identifier.c_str());
             return;
         }
 
-        // look up new parent path based on parent objectIdentifier
-        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, parent_objectIdentifier, "", true, new_parent_irods_path); 
+        // look up new parent path based on parent object_identifier
+        status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.target_parent_object_identifier, "", true, new_parent_irods_path); 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by objectIdentifier.", parent_objectIdentifier.c_str());
+            rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by cd.object_identifier.", cd.target_parent_object_identifier.c_str());
             return;
         }
 
-        std::string new_irods_path = new_parent_irods_path + "/" + object_name;
+        std::string new_irods_path = new_parent_irods_path + "/" + cd.object_name;
 
         // modify the file path
         modDataObjMeta_t modDataObjMetaInp;
@@ -823,7 +812,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
 
         keyValPair_t reg_param;
         memset( &reg_param, 0, sizeof( reg_param ) );
-        addKeyVal( &reg_param, FILE_PATH_KW, physical_path.c_str());
+        addKeyVal( &reg_param, FILE_PATH_KW, cd.target_physical_path.c_str());
         modDataObjMetaInp.regParam = &reg_param;
 
         modDataObjMetaInp.dataObjInfo = &dataObjInfo;
@@ -832,7 +821,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
         status = rsModDataObjMeta( _comm, &modDataObjMetaInp );
 
         if ( status < 0 ) {
-            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -849,7 +838,7 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
         status = rsDataObjRename(_comm, &dataObjRenameInp);
 
         if ( status < 0 ) {
-            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -857,11 +846,9 @@ void handle_rename_file(const std::vector<std::pair<std::string, std::string> >&
 
 }
 
-void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
+void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
 
@@ -870,42 +857,42 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
     std::string new_parent_irods_path;
     std::string new_irods_path;
 
-    // look up the old irods path for the collection based on objectIdentifier
-    status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", true, old_irods_path); 
+    // look up the old irods path for the collection based on object_identifier
+    status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.object_identifier, "", true, old_irods_path); 
     if (status != 0) {
-    rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by objectIdentifier.", objectIdentifier.c_str());
+    rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by object_identifier.", cd.object_identifier.c_str());
         return;
     }
 
-    // look up new parent path based on the new parent objectIdentifier
-    status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, parent_objectIdentifier, "", true, new_parent_irods_path); 
+    // look up new parent path based on the new parent object_identifier
+    status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.target_parent_object_identifier, "", true, new_parent_irods_path); 
     if (status != 0) {
-        rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by objectIdentifier.", parent_objectIdentifier.c_str());
+        rodsLog(LOG_ERROR, "Error renaming data object %s.  Could not find object by cd.object_identifier.", cd.target_parent_object_identifier.c_str());
         return;
     }
 
     // use object_name to get new irods path
-    new_irods_path = new_parent_irods_path + "/" + object_name;
+    new_irods_path = new_parent_irods_path + "/" + cd.object_name;
 
 
     // until issue 6 is resolved, just do all directory renames as direct db access 
     if (true) {
-    //if (direct_db_access_flag) { 
+    //if (direct_db_access) { 
 
         char parent_path_cstr[MAX_NAME_LEN];
         std::string collection_path;
 
-        // get the parent's path - using parent's objectIdentifier
+        // get the parent's path - using parent's object_identifier
         std::vector<std::string> bindVars;
-        bindVars.push_back(parent_objectIdentifier);
-        status = cmlGetStringValueFromSql(get_collection_path_from_objectIdentifier_sql.c_str(), parent_path_cstr, MAX_NAME_LEN, bindVars, icss);
+        bindVars.push_back(cd.target_parent_object_identifier);
+        status = cmlGetStringValueFromSql(get_collection_path_from_object_identifier_sql.c_str(), parent_path_cstr, MAX_NAME_LEN, bindVars, icss);
         std::string parent_path(parent_path_cstr);
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error looking up parent collection for rename for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error looking up parent collection for rename for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             cmlExecuteNoAnswerSql("rollback", icss);
         }
 
-        collection_path = parent_path + irods::get_virtual_path_separator().c_str() + object_name;
+        collection_path = parent_path + irods::get_virtual_path_separator().c_str() + cd.object_name;
 
         rodsLog(LOG_DEBUG, "collection path = %s\tparent_path = %s", collection_path.c_str(), parent_path.c_str());
           
@@ -913,12 +900,12 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
         // update coll_name, parent_coll_name, and coll_id
         cllBindVars[0] = collection_path.c_str();
         cllBindVars[1] = parent_path.c_str();
-        cllBindVars[2] = objectIdentifier.c_str();
+        cllBindVars[2] = cd.object_identifier.c_str();
         cllBindVarCount = 3;
         status = cmlExecuteNoAnswerSql(update_collection_for_rename_sql.c_str(), icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error updating collection object rename for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating collection object rename for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             cmlExecuteNoAnswerSql("rollback", icss);
             return;
         }
@@ -927,7 +914,7 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
         status =  cmlExecuteNoAnswerSql("commit", icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing update to collection rename for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing update to collection rename for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 #endif
@@ -976,7 +963,7 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 #endif
 
             if ( status < 0 && status != CAT_SUCCESS_BUT_WITH_NO_INFO) {
-                rodsLog(LOG_ERROR, "Error updating data objects after collection move for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+                rodsLog(LOG_ERROR, "Error updating data objects after collection move for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
                 cmlExecuteNoAnswerSql("rollback", icss);
                 return;
             }
@@ -984,13 +971,13 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 #if !defined(COCKROACHDB_ICAT)
             status =  cmlExecuteNoAnswerSql("commit", icss);
             if (status != 0) {
-                rodsLog(LOG_ERROR, "Error committing data object update after collection move for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+                rodsLog(LOG_ERROR, "Error committing data object update after collection move for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
                 return;
             } 
 #endif
 
         } catch(const std::out_of_range& e) {
-            rodsLog(LOG_ERROR, "Error updating data objects after collection move for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data objects after collection move for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -1007,7 +994,7 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 
         status = rsDataObjRename( _comm, &dataObjRenameInp );
         if ( status < 0 ) {
-            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error updating data object rename for data_object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -1017,34 +1004,32 @@ void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& 
 
 }
 
-void handle_unlink(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
+void handle_unlink(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
 
-    if (direct_db_access_flag) { 
+    if (direct_db_access) { 
 
-        cllBindVars[0] = objectIdentifier.c_str();
+        cllBindVars[0] = cd.object_identifier.c_str();
         cllBindVarCount = 1;
         status = cmlExecuteNoAnswerSql(unlink_sql.c_str(), icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error deleting data object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error deleting data object %s.  Error is %i", cd.object_identifier.c_str(), status);
             cmlExecuteNoAnswerSql("rollback", icss);
             return;
         }
 
         // delete the metadata on the data object 
-        cllBindVars[0] = objectIdentifier.c_str();
+        cllBindVars[0] = cd.object_identifier.c_str();
         cllBindVarCount = 1;
         status = cmlExecuteNoAnswerSql(remove_object_meta_sql.c_str(), icss);
 
         if (status != 0) {
             // Couldn't delete metadata.  Just log and return 
-            rodsLog(LOG_ERROR, "Error deleting metadata from data object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error deleting metadata from data object %s.  Error is %i", cd.object_identifier.c_str(), status);
         }
 
 
@@ -1052,7 +1037,7 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
         status =  cmlExecuteNoAnswerSql("commit", icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing delete for data object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing delete for data object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 #endif
@@ -1061,12 +1046,12 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
 
         std::string irods_path;
        
-        // look up object based on objectIdentifier
-        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", false, irods_path); 
+        // look up object based on object_identifier
+        status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.object_identifier, "", false, irods_path); 
 
         if (status != 0) {
             // Log as debug since this is a normal condition when the data object is not in register map.
-            rodsLog(LOG_DEBUG, "Error unregistering data object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_DEBUG, "Error unregistering data object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -1079,7 +1064,7 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
         status = rsDataObjUnlink(_comm, &dataObjInp);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error unregistering data object %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error unregistering data object %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -1089,11 +1074,11 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
 
 #if !defined(COCKROACHDB_ICAT)
 
-    void handle_batch_unlink(const std::vector<std::string>& objectIdentifier_list, const int64_t& resource_id, 
+    void handle_batch_unlink(const std::vector<std::string>& object_identifier_list, const int64_t& resource_id, 
             const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss) {
     
         //size_t transactions_per_update = 1;
-        int64_t delete_count = objectIdentifier_list.size();
+        int64_t delete_count = object_identifier_list.size();
         int status;
     
         // delete from R_DATA_MAIN
@@ -1114,10 +1099,10 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
             std::vector<std::string> object_id_list;
 
             std::string query_objects_sql = "select R_OBJT_METAMAP.object_id from R_OBJT_METAMAP inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                            "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value in (";
+                            "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value in (";
              
             for (int64_t i = 0; batch_begin + i < delete_count && i < maximum_records_per_sql_command; ++i) {
-                query_objects_sql += "'" + objectIdentifier_list[batch_begin + i] + "'";
+                query_objects_sql += "'" + object_identifier_list[batch_begin + i] + "'";
                 if (batch_begin + i == delete_count - 1 || maximum_records_per_sql_command - 1 == i) {
                 query_objects_sql += ")";
                 } else {
@@ -1270,10 +1255,10 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
 
 #if defined(COCKROACHDB_ICAT)
 
-    void handle_batch_unlink(const std::vector<std::string>& objectIdentifier_list, const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss) {
+    void handle_batch_unlink(const std::vector<std::string>& object_identifier_list, const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss) {
 
         //size_t transactions_per_update = 1;
-        int64_t delete_count = objectIdentifier_list.size();
+        int64_t delete_count = object_identifier_list.size();
         int status;
 
         // delete from R_DATA_MAIN
@@ -1294,10 +1279,10 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
             std::vector<std::string> object_id_list;
 
             std::string query_objects_sql = "select R_OBJT_METAMAP.object_id from R_OBJT_METAMAP inner join R_META_MAIN on R_META_MAIN.meta_id = R_OBJT_METAMAP.meta_id "
-                                            "where R_META_MAIN.meta_attr_name = '" + objectIdentifier_avu_key + "' and R_META_MAIN.meta_attr_value in (";
+                                            "where R_META_MAIN.meta_attr_name = '" + object_identifier_avu_key + "' and R_META_MAIN.meta_attr_value in (";
          
             for (int64_t i = 0; batch_begin + i < delete_count && i < maximum_records_per_sql_command; ++i) {
-                query_objects_sql += "'" + objectIdentifier_list[batch_begin + i] + "'";
+                query_objects_sql += "'" + object_identifier_list[batch_begin + i] + "'";
                 if (batch_begin + i == delete_count - 1 || maximum_records_per_sql_command - 1 == i) {
                     query_objects_sql += ")";
                 } else {
@@ -1398,36 +1383,34 @@ void handle_unlink(const std::vector<std::pair<std::string, std::string> >& regi
     }
 #endif // defined(COCKROACHDB_ICAT)
 
-void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& register_map, 
-        const int64_t& resource_id, const std::string& resource_name, const std::string& objectIdentifier, 
-        const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifier, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access_flag) {
+void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access) {
 
     int status;
 
-    if (direct_db_access_flag) { 
+    if (direct_db_access) { 
 
         std::string irods_path;
 
-        // look up object based on objectIdentifier
-        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", true, irods_path); 
+        // look up object based on object_identifier
+        status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.object_identifier, "", true, irods_path); 
 
         if (status != 0) {
             // Log as debug since this is a normal condition when the collection is not in register map.
-            rodsLog(LOG_DEBUG, "Error deleting directory %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_DEBUG, "Error deleting directory %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
 
         // delete the metadata on the collection 
-        cllBindVars[0] = objectIdentifier.c_str();
+        cllBindVars[0] = cd.object_identifier.c_str();
         cllBindVarCount = 1;
         status = cmlExecuteNoAnswerSql(remove_object_meta_sql.c_str(), icss);
 
         if (status != 0) {
             // Couldn't delete metadata.  Just log and return.
-            rodsLog(LOG_ERROR, "Error deleting metadata from collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error deleting metadata from collection %s.  Error is %i", cd.object_identifier.c_str(), status);
         }
 
         // delete the collection
@@ -1444,7 +1427,7 @@ void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& regis
         status =  cmlExecuteNoAnswerSql("commit", icss);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error committing delete for collection %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error committing delete for collection %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 #endif
@@ -1453,12 +1436,12 @@ void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& regis
 
         std::string irods_path;
        
-        // look up object based on objectIdentifier
-        status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", true, irods_path); 
+        // look up object based on object_identifier
+        status = find_irods_path_with_avu(_comm, object_identifier_avu_key, cd.object_identifier, "", true, irods_path); 
 
         if (status != 0) {
             // Log as debug since this is a normal condition when the collection is not in register map.
-            rodsLog(LOG_DEBUG, "Error deleting directory %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_DEBUG, "Error deleting directory %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -1471,7 +1454,7 @@ void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& regis
         status = rsRmColl(_comm, &rmCollInp, nullptr);
 
         if (status != 0) {
-            rodsLog(LOG_ERROR, "Error deleting directory %s.  Error is %i", objectIdentifier.c_str(), status);
+            rodsLog(LOG_ERROR, "Error deleting directory %s.  Error is %i", cd.object_identifier.c_str(), status);
             return;
         }
 
@@ -1480,7 +1463,7 @@ void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& regis
 }
 
 void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& register_map, const std::string& physical_path, 
-                const std::string& objectIdentifier, rsComm_t* _comm, icatSessionStruct *icss, bool direct_db_access_flag) {
+                const std::string& object_identifier, rsComm_t* _comm, icatSessionStruct *icss, bool direct_db_access) {
 
     std::string irods_path;
     if (physical_path_to_irods_path(physical_path, register_map, irods_path) < 0) {
@@ -1489,18 +1472,18 @@ void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& r
         return;
     }
 
-    rodsLog(LOG_NOTICE, "Writing FID (%s) to %s", objectIdentifier.c_str(), irods_path.c_str());
+    rodsLog(LOG_NOTICE, "Writing FID (%s) to %s", object_identifier.c_str(), irods_path.c_str());
 
     // query metadata to see if it already exists
-    if (direct_db_access_flag) {
+    if (direct_db_access) {
         rodsLong_t coll_id;
         std::vector<std::string> bindVars;
-        bindVars.push_back(objectIdentifier);
-        if (cmlGetIntegerValueFromSql(get_collection_id_from_objectIdentifier_sql.c_str(), &coll_id, bindVars, icss ) != CAT_NO_ROWS_FOUND) {
+        bindVars.push_back(object_identifier);
+        if (cmlGetIntegerValueFromSql(get_collection_id_from_object_identifier_sql.c_str(), &coll_id, bindVars, icss ) != CAT_NO_ROWS_FOUND) {
             return;
         }
     } else {
-        int status = find_irods_path_with_avu(_comm, objectIdentifier_avu_key, objectIdentifier, "", true, irods_path); 
+        int status = find_irods_path_with_avu(_comm, object_identifier_avu_key, object_identifier, "", true, irods_path); 
         if (status == 0) {
             // found a row which means the avu is already there, just return     
             return;
@@ -1513,8 +1496,8 @@ void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& r
     modAVUMetadataInp.arg0 = "add";
     modAVUMetadataInp.arg1 = "-C";
     modAVUMetadataInp.arg2 = const_cast<char*>(irods_path.c_str());
-    modAVUMetadataInp.arg3 = const_cast<char*>(objectIdentifier_avu_key.c_str());
-    modAVUMetadataInp.arg4 = const_cast<char*>(objectIdentifier.c_str());
+    modAVUMetadataInp.arg3 = const_cast<char*>(object_identifier_avu_key.c_str());
+    modAVUMetadataInp.arg4 = const_cast<char*>(object_identifier.c_str());
 
     // ignore error code because the fid metadata likely already exists on the root collection
     rsModAVUMetadata(_comm, &modAVUMetadataInp);

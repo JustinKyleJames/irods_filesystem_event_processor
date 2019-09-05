@@ -30,7 +30,7 @@
 
 // common headers 
 #include "irods_filesystem_event_processor_errors.hpp"
-#include "file_system_event.hpp"
+#include "file_system_event_avro.hpp"
 
 // irods libraries
 #include "rodsDef.h"
@@ -216,7 +216,7 @@ int send_change_map_to_irods(rcComm_t&& irods_conn, irodsFsEventApiInp_t *inp) {
 // irods api client thread main routine
 // this is the main loop that reads the change entries in memory and sends them to iRODS via the API.
 void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struct_ptr,
-        change_map_t* change_map, unsigned int thread_number, std::multiset<std::string>* active_objectIdentifier_list) {
+        change_map_t* change_map, unsigned int thread_number, std::multiset<std::string>* active_object_identifier_list) {
 
     std::string thread_identifier_str = str(boost::format("irods client (%u)") % thread_number);
     thread_identifier = const_cast<char*>(thread_identifier_str.c_str());
@@ -302,7 +302,7 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
                    // get records ready to be processed into serialized buffer 
                    boost::shared_ptr< std::vector<uint8_t>> buffer;
                    int rc = write_change_table_to_avro_buf(config_struct_ptr, buffer,
-                           *change_map, *active_objectIdentifier_list);
+                           *change_map, *active_object_identifier_list);
             
             
                    // if we had a collision (meaning a dependency was encountered) avoid a busy-wait by breaking out of the
@@ -323,14 +323,14 @@ void irods_api_client_main(const filesystem_event_aggregator_cfg_t *config_struc
                        LOG(LOG_DBG, "send changemap to iRODS");
                        if (irods_filesystem_event_processor_error::IRODS_ERROR == send_change_map_to_irods(static_cast<rcComm_t>(conn), &inp)) {
 
-                           remove_objectIds_in_avro_buffer_from_active_list(buffer, *active_objectIdentifier_list);
+                           remove_object_identifiers_in_avro_buffer_from_active_list(buffer, *active_object_identifier_list);
 
                            LOG(LOG_DBG, "calling add_avro_buffer_back_to_change_table");
-                           add_avro_buffer_back_to_change_table(buffer, *change_map, *active_objectIdentifier_list);
+                           add_avro_buffer_back_to_change_table(buffer, *change_map, *active_object_identifier_list);
 
                            throw std::runtime_error("received error from iRODS");
                        }
-                       remove_objectIds_in_avro_buffer_from_active_list(buffer, *active_objectIdentifier_list);
+                       remove_object_identifiers_in_avro_buffer_from_active_list(buffer, *active_object_identifier_list);
                        LOG(LOG_DBG, "iRODS responded with success");
             
                    }  
@@ -452,9 +452,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // create a std::multiset of objectIdentifier which is used to pause sending updates to irods client updater threads
+    // create a std::multiset of object_identifier which is used to pause sending updates to irods client updater threads
     // when a dependency is detected 
-    std::multiset<std::string> active_objectIdentifier_list;
+    std::multiset<std::string> active_object_identifier_list;
 
 
     // start a pub/sub publisher which is used to terminate threads and to send irods up/down messages
@@ -468,7 +468,7 @@ int main(int argc, char *argv[]) {
 
     // start up the threads
     for (unsigned int i = 0; i < config_struct.irods_updater_thread_count; ++i) {
-        std::thread t(irods_api_client_main, &config_struct, &change_map, i, &active_objectIdentifier_list);
+        std::thread t(irods_api_client_main, &config_struct, &change_map, i, &active_object_identifier_list);
         irods_api_client_thread_list.push_back(std::move(t));
     }
 
@@ -478,7 +478,7 @@ int main(int argc, char *argv[]) {
     socket.bind (config_struct.event_aggregator_address);
 
 
-    unsigned long long last_cr_index = 0;
+    unsigned long long last_change_record_index = 0;
     while (keep_running.load()) {
 
         zmq::message_t request;
@@ -497,8 +497,9 @@ int main(int argc, char *argv[]) {
         fs_event::filesystem_event event; 
         avro::decode(*dec, event);
 
-        LOG(LOG_DBG, "Received event: [%zu, %s, %s, %s, %s, %s, %s, %s]", event.index, event.event_type.c_str(), event.root_path.c_str(),
-                event.entryId.c_str(), event.targetParentId.c_str(), event.basename.c_str(), event.full_target_path.c_str(), event.full_path.c_str());
+        LOG(LOG_DBG, "Received event: [%zu, %s, %s, %s, %s, %s, %s, %s, %s]", event.change_record_index, event.event_type.c_str(), event.root_path.c_str(),
+                event.object_identifier.c_str(), event.source_parent_object_identifier.c_str(), event.target_parent_object_identifier.c_str(), 
+                event.object_name.c_str(), event.source_physical_path.c_str(), event.target_physical_path.c_str());
 
         size_t change_table_size = get_change_table_size(change_map);
         LOG(LOG_DBG, "change_table size is %zu", change_table_size);
@@ -514,19 +515,19 @@ int main(int argc, char *argv[]) {
 
             // write entry to change_map
             if (event.event_type == "CREATE") {
-                handle_create(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+                handle_create(event, change_map);
             } else if (event.event_type == "CLOSE") {
-                handle_close(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+                handle_close(event, change_map);
             } else if (event.event_type == "UNLINK") {
-                handle_unlink(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+                handle_unlink(event, change_map);
             } else if (event.event_type == "MKDIR") {
-                handle_mkdir(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+                handle_mkdir(event, change_map);
             } else if (event.event_type == "RMDIR") {
-                handle_rmdir(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+                handle_rmdir(event, change_map);
             } else if (event.event_type == "RENAME") {
-                handle_rename(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_target_path, event.full_path, change_map);
+                handle_rename(event, change_map);
             } else if (event.event_type == "TRUNCATE") {
-                handle_trunc(event.index, event.root_path, event.entryId, event.targetParentId, event.basename, event.full_path, change_map);
+                handle_trunc(event, change_map);
             } else {
                 LOG(LOG_ERR, "Unknown event type (%s) received from listener.  Skipping...", event.event_type.c_str());
             }
@@ -553,8 +554,8 @@ int main(int argc, char *argv[]) {
         fatal_error_detected = true;
     }
 
-    if (write_cr_index_to_sqlite(last_cr_index, "filesystem_event_aggregator") < 0) {
-        LOG(LOG_ERR, "failed to write cr_index to database upon exit");
+    if (write_change_record_index_to_sqlite(last_change_record_index, "filesystem_event_aggregator") < 0) {
+        LOG(LOG_ERR, "failed to write change_record_index to database upon exit");
         fatal_error_detected = true;
     }
 

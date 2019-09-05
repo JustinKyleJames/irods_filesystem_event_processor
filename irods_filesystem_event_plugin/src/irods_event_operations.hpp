@@ -42,51 +42,44 @@
 #define IRODS_FILESYSTEM_EVENT_OPERATIONS_H
 
 void handle_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_batch_create(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id,
-        const std::string& resource_name, const std::vector<std::string>& objectIdentifer_list, const std::vector<std::string>& physical_path_list,
-        const std::vector<std::string>& object_name_list, const std::vector<std::string>& parent_objectIdentifer_list,
+        const std::string& resource_name, const std::vector<std::string>& object_identifier_list, const std::vector<std::string>& physical_path_list,
+        const std::vector<std::string>& object_name_list, const std::vector<std::string>& target_parent_object_identifier_list,
         const std::vector<int64_t>& file_size_list, const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id,
         bool set_metadata_for_storage_tiering_time_violation, const std::string& metadata_key_for_storage_tiering_time_violation);
 
 void handle_mkdir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_other(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_rename_file(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_rename_dir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_unlink(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
-void handle_batch_unlink(const std::vector<std::string>& objectIdentifer_list, const int64_t& resource_id, 
+void handle_batch_unlink(const std::vector<std::string>& object_identifier_list, const int64_t& resource_id, 
         const int64_t& maximum_records_per_sql_command, rsComm_t* _comm, icatSessionStruct *icss); 
 
 void handle_rmdir(const std::vector<std::pair<std::string, std::string> >& register_map, const int64_t& resource_id, 
-        const std::string& resource_name, const std::string& objectIdentifer, const std::string& physical_path, const std::string& object_name, 
-        const file_system_event_aggregator::ObjectTypeEnum& object_type, const std::string& parent_objectIdentifer, const int64_t& file_size,
-        rsComm_t* _comm, icatSessionStruct *icss, const rodsLong_t& user_id, bool direct_db_access);
+        const std::string& resource_name, file_system_event_aggregator::ChangeDescriptor cd, rsComm_t* _comm, icatSessionStruct *icss, 
+        const rodsLong_t& user_id, bool direct_db_access);
 
 void handle_write_fid(const std::vector<std::pair<std::string, std::string> >& register_map, const std::string& physical_path, 
-        const std::string& objectIdentifer, rsComm_t* _comm, icatSessionStruct *icss, bool direct_db_access);
+        const std::string& object_identifier, rsComm_t* _comm, icatSessionStruct *icss, bool direct_db_access);
 
 
 

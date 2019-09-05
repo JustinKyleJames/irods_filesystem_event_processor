@@ -1,6 +1,6 @@
 {
     "mdtname": "test-MDT0000",
-    "changelog_reader": "cl3",
+    "changelog_reader": "cl1",
     "lustre_root_path": "/mnt/lustre",
     "log_level": "LOG_DBG",
     "event_aggregator_address": "ipc:///changelog_reader_push_work_events",
