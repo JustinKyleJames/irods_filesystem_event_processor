@@ -46,12 +46,15 @@ class Test_Filesystem_Connector(object):
 
     @classmethod
     def setUpClass(cls):
+       
+        # create <mount>/home and <mount>/rods 
+        lib.execute_command(['mkdir',  '%s/home' % cls.filesystem_mount_point])
+        lib.execute_command(['mkdir',  '%s/rods' % cls.filesystem_mount_point])
 
         os.system('echo setUpClass for %s ran' % cls.irods_api_update_type)
 
         # set up configuration files for connector and listener
         cls.setup_aggregator_configuration_file(cls)
-        cls.setup_beegfs_listener_configuration_file(cls)
 
         # start connector and listeners
         # TODO - beegfs listener can't connect to socket unless root 
@@ -67,9 +70,13 @@ class Test_Filesystem_Connector(object):
     @classmethod
     def tearDownClass(cls):
 
+        lib.execute_command(['rmdir',  '%s/home' % cls.filesystem_mount_point])
+        lib.execute_command(['rmdir',  '%s/rods' % cls.filesystem_mount_point])
+
         # stop processes
         for connector in cls.process_list:
             connector.send_signal(signal.SIGINT)
+        time.sleep(5)
 
     def setUp(self):
 
@@ -104,7 +111,11 @@ class Test_Filesystem_Connector(object):
             for subpath in glob.glob('%s/*' % path):
                 self.remove_path(subpath)
             try:
-                os.rmdir(path)
+                # don't delete home or rods directories
+                if path != '%s/home' % self.filesystem_mount_point and path != '%s/rods' % self.filesystem_mount_point:
+                    # sleep workaround for BeeGFS giving events out of order
+                    time.sleep(1)
+                    os.rmdir(path)
             except OSError as error:
                 pass
 
@@ -203,19 +214,19 @@ class Test_Filesystem_Connector(object):
         self.admin.assert_icommand(['ils', self.base_register_location], 'STDOUT_MULTILINE', ['file1'])
         self.admin.assert_icommand(['iget', '%s/file1' % self.base_register_location, '-'], 'STDOUT_SINGLELINE', 'contents of file1')
 
-#    def test_write_to_file_mountpoint(self):
-#
-#        self.write_to_file('%s/file1' % self.filesystem_mount_point, 'contents of file1') 
-#        time.sleep(3)
-#        self.admin.assert_icommand(['ils', '%s/file1' % self.base_register_location], 'STDOUT_MULTILINE', ['  %s/file1' % self.base_register_location])
-#        self.admin.assert_icommand(['iget', '%s/file1' % self.base_register_location, '-'], 'STDOUT_MULTILINE', ['contents of file1'])
-#
-#    def test_write_to_file_mountpoint(self):
-#
-#        self.write_to_file('%s/file1' % self.filesystem_mount_point, 'contents of file1') 
-#        time.sleep(3)
-#        self.admin.assert_icommand(['ils', '%s/file1' % self.base_register_location], 'STDOUT_MULTILINE', ['  %s/file1' % self.base_register_location])
-#        self.admin.assert_icommand(['iget', '%s/file1' % self.base_register_location, '-'], 'STDOUT_MULTILINE', ['contents of file1'])
+    def test_write_to_mount_home(self):
+
+        self.write_to_file('%s/home/file1' % self.filesystem_mount_point, 'contents of file1') 
+        time.sleep(3)
+        self.admin.assert_icommand(['ils', '%s/file1' % self.home_register_location], 'STDOUT_MULTILINE', ['  %s/file1' % self.home_register_location])
+        self.admin.assert_icommand(['iget', '%s/file1' % self.home_register_location, '-'], 'STDOUT_MULTILINE', ['contents of file1'])
+
+    def test_write_to_mount_rods(self):
+
+        self.write_to_file('%s/rods/file1' % self.filesystem_mount_point, 'contents of file1') 
+        time.sleep(3)
+        self.admin.assert_icommand(['ils', '%s/file1' % self.rods_register_location], 'STDOUT_MULTILINE', ['  %s/file1' % self.rods_register_location])
+        self.admin.assert_icommand(['iget', '%s/file1' % self.rods_register_location, '-'], 'STDOUT_MULTILINE', ['contents of file1'])
 
     def test_append_to_file(self):
 
@@ -249,7 +260,7 @@ class Test_Filesystem_Connector(object):
         self.write_to_file('%s/dir1/file1' % self.filesystem_mount_point, 'contents of file1') 
         time.sleep(3)
         lib.execute_command(['mv',  '%s/dir1' % self.filesystem_mount_point, '%s/dir2' % self.filesystem_mount_point])
-        time.sleep(3)
+        time.sleep(6)
         self.admin.assert_icommand(['ils', '%s/dir2/dir1' % self.base_register_location], 'STDOUT_MULTILINE', ['%s/dir2/dir1:' % self.base_register_location, '  file1'])
         self.admin.assert_icommand(['ils', '-L', '%s/dir2/dir1/file1' % self.base_register_location], 'STDOUT_SINGLELINE', 'generic    %s/dir2/dir1/file1' % self.filesystem_mount_point)
         self.admin.assert_icommand(['iget', '%s/dir2/dir1/file1' % self.base_register_location, '-'], 'STDOUT_SINGLELINE', 'contents of file1')
@@ -299,43 +310,4 @@ class Test_Filesystem_Connector(object):
 #        self.connector_list.append(subprocess.Popen(['/bin/lustre_irods_connector',  '-c', config_file2], shell=False))
 #        time.sleep(10)
 #        self.perform_multi_mdt_tests()
-
-class Test_Filesystem_Connector_Beegfs_Direct(Test_Filesystem_Connector, unittest.TestCase):
-   
-    filesystem_mount_point = '/mnt/beegfs'
-    aggregator_config_file = '/etc/irods/aggregator_config.json'
-    listener_config_file = '/etc/irods/beegfs_listener_config.json'
-    listener_executable_path = '/bin/beegfs_event_listener'
-    irods_api_update_type = 'direct'
-
-    def __init__(self, *args, **kwargs):
-        super(Test_Filesystem_Connector_Beegfs_Direct, self).__init__(*args, **kwargs)
-
-    @classmethod
-    def setUpClass(cls):
-        super(Test_Filesystem_Connector_Beegfs_Direct, cls).setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        super(Test_Filesystem_Connector_Beegfs_Direct, cls).tearDownClass()
-
-
-class Test_Filesystem_Connector_Beegfs_Policy(Test_Filesystem_Connector , unittest.TestCase):
-    
-    filesystem_mount_point = '/mnt/beegfs'
-    aggregator_config_file = '/etc/irods/aggregator_config.json'
-    listener_config_file = '/etc/irods/beegfs_listener_config.json'
-    listener_executable_path = '/bin/beegfs_event_listener'
-    irods_api_update_type = 'policy'
-
-    def __init__(self, *args, **kwargs):
-        super(Test_Filesystem_Connector_Beegfs_Policy, self).__init__(*args, **kwargs)
-
-    @classmethod
-    def setUpClass(cls):
-        super(Test_Filesystem_Connector_Beegfs_Policy, cls).setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        super(Test_Filesystem_Connector_Beegfs_Policy, cls).tearDownClass()
 

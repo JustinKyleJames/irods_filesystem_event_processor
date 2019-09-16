@@ -798,7 +798,7 @@ int serialize_change_map_to_sqlite(change_map_t& change_map, const std::string& 
         sqlite3_stmt *stmt;     
         sqlite3_prepare_v2(db, "insert into change_map (object_identifier, source_parent_object_identifier, target_parent_object_identifier, object_name, source_physical_path, "
                                "target_physical_path, event_type, timestamp, oper_complete, object_type, file_size, change_record_index) "
-                               "values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11);", -1, &stmt, NULL);       
+                               "values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12);", -1, &stmt, NULL);       
         sqlite3_bind_text(stmt, 1, iter->object_identifier.c_str(), -1, SQLITE_STATIC); 
         sqlite3_bind_text(stmt, 2, iter->source_parent_object_identifier.c_str(), -1, SQLITE_STATIC); 
         sqlite3_bind_text(stmt, 3, iter->target_parent_object_identifier.c_str(), -1, SQLITE_STATIC); 
