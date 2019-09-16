@@ -121,8 +121,6 @@ int handle_close(const fs_event::filesystem_event& event, change_map_t& change_m
 
 int handle_mkdir(const fs_event::filesystem_event& event, change_map_t& change_map) {
 
-    LOG(LOG_ERR, "handle_mkdir:  target_parent_object_identifier=%s", event.target_parent_object_identifier.c_str());
-
     std::lock_guard<std::mutex> lock(change_table_mutex);
 
     // get change map with hashed index of object_identifier

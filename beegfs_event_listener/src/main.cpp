@@ -80,19 +80,6 @@ std::string serialize_and_send_event(const fs_event::filesystem_event& event, zm
     return std::string(static_cast<char*>(reply.data()), reply.size());
 }
 
-class beegfs_event_read_exception : public std::exception
-{
- public:
-    beegfs_event_read_exception(std::string s) {
-        description = s;
-    }   
-    const char* what() const throw()
-    {   
-        return description.c_str();
-    }   
- private:
-    std::string description;
-};
  
 std::string concatenate_paths_with_boost(const std::string& p1, const std::string& p2) {
 
@@ -257,7 +244,14 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
     } catch (const zmq::error_t& e) {
     }
 
-    BeeGFS::FileEventReceiver receiver(config_struct.beegfs_socket.c_str());
+    std::unique_ptr<BeeGFS::FileEventReceiver> receiver_ptr;
+
+    try {
+        receiver_ptr = std::make_unique<BeeGFS::FileEventReceiver>(config_struct.beegfs_socket.c_str());
+    } catch (BeeGFS::FileEventReceiver::exception& e) {
+        LOG(LOG_ERR, "%s:%d %s", __FILE__, __LINE__, e.what());
+        return;
+    }
 
     while (keep_running.load()) {
 
@@ -265,7 +259,7 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
         using BeeGFS::FileEventReceiver;
          
         try {
-            const auto data = receiver.read(); 
+            const auto data = receiver_ptr->read(); 
             switch (data.first) {
                 case FileEventReceiver::ReadErrorCode::Success:
                     while (!handle_event(data.second, config_struct.beegfs_root_path, event_aggregator_socket)) {
@@ -282,11 +276,12 @@ void run_main_changelog_reader_loop(const beegfs_event_listener_cfg_t& config_st
                 case FileEventReceiver::ReadErrorCode::ReadFailed:
                     LOG(LOG_WARN, "Read BeeGFS event failed.");
                     break;
-        }
+            };
         } catch (BeeGFS::FileEventReceiver::exception& e) {
-            LOG(LOG_ERR, "%s", e.what());
+            LOG(LOG_ERR, "%s:%d %s", __FILE__, __LINE__, e.what());
         }
-    }
+
+    } 
 }
 
 int main(int argc, char *argv[]) {

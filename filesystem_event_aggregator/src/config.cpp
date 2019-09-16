@@ -158,7 +158,6 @@ int read_config_file(const std::string& filename, filesystem_event_aggregator_cf
         if (0 != read_key_from_map(config_map, "metadata_key_for_storage_tiering_time_violation", config_struct->metadata_key_for_storage_tiering_time_violation, false)) {
             config_struct->metadata_key_for_storage_tiering_time_violation = "irods::access_time";
         } 
-        LOG(LOG_INFO, "set metadata_key_for_storage_tiering_time_violation=%s", config_struct->metadata_key_for_storage_tiering_time_violation.c_str());
 
         // read register_map
         try {

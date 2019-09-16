@@ -189,18 +189,20 @@ int get_physical_path_from_record(const std::string& root_path, changelog_rec_pt
 }
 
 
+// return value is whether to continue reading events
 bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, zmq::socket_t& event_aggregator_socket) {
 
     if (nullptr == rec) {
         LOG(LOG_ERR, "Null rec sent to %s - %d\n", __FUNCTION__, __LINE__);
-        return irods_filesystem_event_processor_error::INVALID_OPERAND_ERROR;
+        return false;
     }
 
     unsigned int cr_type = get_cr_type_from_changelog_rec(rec);
 
     if (cr_type >= get_cl_last()) {
+        // invalid change record type - just skip and continue
         LOG(LOG_ERR, "Invalid cr_type - %u\n", get_cr_type_from_changelog_rec(rec));
-        return irods_filesystem_event_processor_error::INVALID_CR_TYPE_ERROR;
+        return true;
     }
 
     fs_event::filesystem_event event;
@@ -211,7 +213,8 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
     std::string lustre_physical_path;
     int rc = get_physical_path_from_record(lustre_root_path, rec, lustre_physical_path);
     if (irods_filesystem_event_processor_error::SUCCESS != rc && irods_filesystem_event_processor_error::LUSTRE_OBJECT_DNE_ERROR != rc) {
-        return rc;
+        // an error occured looking up physical path - just skip event and continue
+        return true;
     }
 
     event.target_parent_object_identifier = convert_to_fidstr(get_cr_pfid_from_changelog_rec(rec));
@@ -276,14 +279,15 @@ bool handle_record(const std::string& lustre_root_path, changelog_rec_ptr rec, z
         event.event_type = "TRUNCATE";
     } else {
         // event we don't care about, just continue reading events 
-        return true; 
+        return true;
     }
 
     std::string reply_str;
     try {
         reply_str = serialize_and_send_event(event, event_aggregator_socket);
     } catch (const zmq::error_t& e) {
-        return true;  // continue on error
+        // error sending event to accumulator - do not continue 
+        return false;
     }
 
     LOG(LOG_INFO, "reply:  %s", reply_str.c_str());
@@ -495,15 +499,20 @@ int run_main_changelog_reader_loop(const lustre_event_listener_cfg_t& config_str
                     changelog_rec_wrapper_name(rec));
         }
 
-        rc = handle_record(config_struct.lustre_root_path, rec, event_aggregator_socket);
-        if (rc < 0) {
-            lustre_fid_ptr cr_tfid_ptr = get_cr_tfid_from_changelog_rec(rec);
-            LOG(LOG_ERR, "handle record failed for %s %#llx:0x%x:0x%x rc = %i\n", 
-                    changelog_type2str_wrapper(get_cr_type_from_changelog_rec(rec)), 
-                    get_f_seq_from_lustre_fid(cr_tfid_ptr),
-                    get_f_oid_from_lustre_fid(cr_tfid_ptr),
-                    get_f_ver_from_lustre_fid(cr_tfid_ptr),
-                    rc);
+        // continue flag is false if an error occurs which means we should stop reading changelog
+        while (!handle_record(config_struct.lustre_root_path, rec, event_aggregator_socket, continue_flag));
+
+            // we had an error - try again after sleeping
+            if (rc < 0) {
+                lustre_fid_ptr cr_tfid_ptr = get_cr_tfid_from_changelog_rec(rec);
+                LOG(LOG_ERR, "handle record failed for %s %#llx:0x%x:0x%x rc = %i\n", 
+                        changelog_type2str_wrapper(get_cr_type_from_changelog_rec(rec)), 
+                        get_f_seq_from_lustre_fid(cr_tfid_ptr),
+                        get_f_oid_from_lustre_fid(cr_tfid_ptr),
+                        get_f_ver_from_lustre_fid(cr_tfid_ptr),
+                        rc);
+            } 
+            sleep(config_struct.sleep_time_when_changelog_empty_seconds);
         }
 
         last_cr_index = get_cr_index_from_changelog_rec(rec);
