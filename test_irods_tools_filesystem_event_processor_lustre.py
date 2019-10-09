@@ -37,20 +37,31 @@ class Test_Filesystem_Connector_Lustre(Test_Filesystem_Connector):
 
     @classmethod
     def setUpClass(cls):
-        cls.setup_lustre_listener_configuration_file(cls)
+        cls.setup_listener_configuration_file()
         super(Test_Filesystem_Connector_Lustre, cls).setUpClass()
 
     @classmethod
     def tearDownClass(cls):
         super(Test_Filesystem_Connector_Lustre, cls).tearDownClass()
 
+
+    @classmethod
+    def setup_listener_configuration_file(cls):
+
+        listener_config = {
+            "mdtname": "test-MDT0000",
+            "changelog_reader": "cl3",
+            "lustre_root_path": cls.filesystem_mount_point,
+            "log_level": "LOG_ERROR",
+            "event_aggregator_address": "tcp://127.0.0.1:%d" % (cls.zmq_begin_port + 2),
+            "sleep_time_when_changelog_empty_seconds": 1
+        }
+
+        with open(cls.listener_config_file, 'wt') as f:
+            json.dump(listener_config, f, indent=4, ensure_ascii=False)
+
 class Test_Filesystem_Connector_Lustre_Direct(Test_Filesystem_Connector_Lustre, unittest.TestCase):
    
-#    filesystem_mount_point = '/cfs/test/scratch'
-#    aggregator_config_file = '/etc/irods/aggregator_config.json'
-#    listener_config_file = '/etc/irods/lustre_listener_config.json'
-#    listener_executable_path = '/root/irods_filesystem_event_processor/lustre_event_listener/bld/lustre_event_listener'
-#    resource_name = 'lustre-test'
     irods_api_update_type = 'direct'
 
     def __init__(self, *args, **kwargs):
@@ -58,7 +69,6 @@ class Test_Filesystem_Connector_Lustre_Direct(Test_Filesystem_Connector_Lustre, 
 
     @classmethod
     def setUpClass(cls):
-        cls.setup_lustre_listener_configuration_file(cls)
         super(Test_Filesystem_Connector_Lustre_Direct, cls).setUpClass()
 
     @classmethod
@@ -68,11 +78,6 @@ class Test_Filesystem_Connector_Lustre_Direct(Test_Filesystem_Connector_Lustre, 
 
 class Test_Filesystem_Connector_Lustre_Policy(Test_Filesystem_Connector_Lustre , unittest.TestCase):
     
-#    filesystem_mount_point = '/cfs/test/scratch'
-#    aggregator_config_file = '/etc/irods/aggregator_config.json'
-#    listener_config_file = '/etc/irods/lustre_listener_config.json'
-#    listener_executable_path = '/root/irods_filesystem_event_processor/lustre_event_listener/bld/lustre_event_listener'
-#    resource_name = 'lustre-test'
     irods_api_update_type = 'policy'
 
     def __init__(self, *args, **kwargs):
@@ -80,7 +85,6 @@ class Test_Filesystem_Connector_Lustre_Policy(Test_Filesystem_Connector_Lustre ,
 
     @classmethod
     def setUpClass(cls):
-        cls.setup_lustre_listener_configuration_file(cls)
         super(Test_Filesystem_Connector_Lustre_Policy, cls).setUpClass()
 
     @classmethod

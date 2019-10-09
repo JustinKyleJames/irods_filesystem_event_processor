@@ -54,16 +54,18 @@ class Test_Filesystem_Connector(object):
         os.system('echo setUpClass for %s ran' % cls.irods_api_update_type)
 
         # set up configuration files for connector and listener
-        cls.setup_aggregator_configuration_file(cls)
+        cls.setup_aggregator_configuration_file()
 
         # start connector and listeners
         # TODO - beegfs listener can't connect to socket unless root 
 
 
         print 'cls.listener_executable_path=%s' % cls.listener_executable_path
-        cls.process_list.append(subprocess.Popen([cls.listener_executable_path,  '-c', cls.listener_config_file], shell=False))
-        #self.listener_pid = subprocess.Popen(['sudo', self.listener_executable_path,  '-c', self.listener_config_file], shell=False).pid
-        cls.process_list.append(subprocess.Popen(['/root/irods_filesystem_event_processor/filesystem_event_aggregator/bld/filesystem_event_aggregator',  '-c', cls.aggregator_config_file], shell=False))
+        print 'cls.listener_config_file=%s' % cls.listener_config_file
+        print 'cls.aggregator_config_file=%s' % cls.aggregator_config_file
+        #cls.process_list.append(subprocess.Popen([cls.listener_executable_path,  '-c', cls.listener_config_file], shell=False))
+        cls.listener_pid = subprocess.Popen(['sudo', cls.listener_executable_path,  '-c', cls.listener_config_file], shell=False).pid
+        cls.process_list.append(subprocess.Popen(['/bin/filesystem_event_aggregator',  '-c', cls.aggregator_config_file], shell=False))
 
         # write a dummy file to mount point because beegfs doesn't read the first event after startup
         cls.write_to_file('%s/temp' % cls.filesystem_mount_point, 'contents of temp') 
@@ -150,7 +152,7 @@ class Test_Filesystem_Connector(object):
             f.write('\n')
             f.write(contents)
 
-    @staticmethod
+    @classmethod
     def setup_aggregator_configuration_file(cls):
      
         register_map1 = {
@@ -194,34 +196,6 @@ class Test_Filesystem_Connector(object):
 
         with open(cls.aggregator_config_file, 'wt') as f:
             json.dump(aggregator_config, f, indent=4, ensure_ascii=False)
-
-    @staticmethod
-    def setup_beegfs_listener_configuration_file(cls):
-
-        beegfs_listener_config = {
-            "beegfs_socket": "/tmp/beegfslog",
-            "beegfs_root_path": cls.filesystem_mount_point,
-            "event_aggregator_address": "tcp://127.0.0.1:%d" % (cls.zmq_begin_port + 2),
-            "log_level": "LOG_ERROR"
-        }
-
-        with open(cls.listener_config_file, 'wt') as f:
-            json.dump(beegfs_listener_config, f, indent=4, ensure_ascii=False)
-
-    @staticmethod
-    def setup_lustre_listener_configuration_file(cls):
-
-        beegfs_listener_config = {
-            "mdtname": "test-MDT0000",
-            "changelog_reader": "cl3",
-            "lustre_root_path": cls.filesystem_mount_point,
-            "log_level": "LOG_ERROR",
-            "event_aggregator_address": "tcp://127.0.0.1:%d" % (cls.zmq_begin_port + 2),
-            "sleep_time_when_changelog_empty_seconds": 1
-        }
-
-        with open(cls.listener_config_file, 'wt') as f:
-            json.dump(beegfs_listener_config, f, indent=4, ensure_ascii=False)
 
     def test_write_to_file_mountpoint(self):
 
